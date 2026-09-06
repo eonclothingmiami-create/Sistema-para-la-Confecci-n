@@ -104,13 +104,32 @@ export function OrdersPage() {
         status: values.status,
         notes: values.notes || null,
       }
+      const existingSameNumber = (query.data ?? []).filter(
+        (item) => item.order_number.trim().toLowerCase() === payload.order_number.toLowerCase(),
+      )
+      // #region agent log
+      fetch('http://127.0.0.1:7369/ingest/9f149b20-57f1-4c0a-9600-8d1604ff4e7c',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'62c2ea'},body:JSON.stringify({sessionId:'62c2ea',runId:'pre-fix',hypothesisId:'A',location:'OrdersPage.tsx:save',message:'save order attempt',data:{isEditing:Boolean(editing),editingId:editing?.id??null,orderNumber:payload.order_number,referenceId:payload.reference_id,totalQuantity:payload.total_quantity,status:payload.status,hasStartDate:Boolean(payload.start_date),hasEndDate:Boolean(payload.estimated_end_date),existingSameNumberCount:existingSameNumber.length,existingSameNumberIds:existingSameNumber.map((item)=>item.id)},timestamp:Date.now()})}).catch(()=>{});
+      // #endregion
       if (editing) {
         const { error } = await supabase.from('production_orders').update(payload).eq('id', editing.id)
-        if (error) throw error
+        if (error) {
+          // #region agent log
+          fetch('http://127.0.0.1:7369/ingest/9f149b20-57f1-4c0a-9600-8d1604ff4e7c',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'62c2ea'},body:JSON.stringify({sessionId:'62c2ea',runId:'pre-fix',hypothesisId:'C',location:'OrdersPage.tsx:update',message:'update order failed',data:{code:error.code,message:error.message,details:error.details,hint:error.hint},timestamp:Date.now()})}).catch(()=>{});
+          // #endregion
+          throw error
+        }
         return
       }
       const { error } = await supabase.from('production_orders').insert(payload)
-      if (error) throw error
+      if (error) {
+        // #region agent log
+        fetch('http://127.0.0.1:7369/ingest/9f149b20-57f1-4c0a-9600-8d1604ff4e7c',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'62c2ea'},body:JSON.stringify({sessionId:'62c2ea',runId:'pre-fix',hypothesisId:'A',location:'OrdersPage.tsx:insert',message:'insert order failed',data:{code:error.code,message:error.message,details:error.details,hint:error.hint},timestamp:Date.now()})}).catch(()=>{});
+        // #endregion
+        throw error
+      }
+      // #region agent log
+      fetch('http://127.0.0.1:7369/ingest/9f149b20-57f1-4c0a-9600-8d1604ff4e7c',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'62c2ea'},body:JSON.stringify({sessionId:'62c2ea',runId:'pre-fix',hypothesisId:'E',location:'OrdersPage.tsx:insert',message:'insert order succeeded',data:{orderNumber:payload.order_number},timestamp:Date.now()})}).catch(()=>{});
+      // #endregion
     },
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ['production_orders'] })
