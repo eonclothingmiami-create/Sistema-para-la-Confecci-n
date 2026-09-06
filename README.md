@@ -23,8 +23,8 @@ Semáforo:
 
 1. Crea un proyecto en [Supabase](https://supabase.com/dashboard).
 2. En **Authentication → Providers**, deja habilitado **Email**.
-3. Desactiva el registro público si no quieres que cualquiera cree cuentas (**Authentication → Providers → Email → Confirm email / disable signups** según tu plan).
-4. Crea usuarios a mano en **Authentication → Users**. La app es **solo login**.
+3. La app permite **Entrar** y **Crear cuenta**. El rol inicial es `supervisor`.
+4. Si no llega el correo de confirmación, en **Authentication → Providers → Email** puedes desactivar “Confirm email” para entrar de inmediato en un taller interno.
 
 ## 2. Variables de entorno
 

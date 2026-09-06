@@ -7,20 +7,39 @@ import { Field, PrimaryButton, TextInput } from '../../components/ui/FormField'
 import { useAuth } from '../../hooks/useAuth'
 import { supabase } from '../../lib/supabase'
 
-const schema = z.object({
+const loginSchema = z.object({
   email: z.string().email('Correo inválido'),
   password: z.string().min(6, 'Mínimo 6 caracteres'),
 })
 
-type FormValues = z.infer<typeof schema>
+const signupSchema = loginSchema
+  .extend({
+    full_name: z.string().min(2, 'Nombre requerido'),
+    confirm_password: z.string().min(6, 'Confirma la contraseña'),
+  })
+  .refine((values) => values.password === values.confirm_password, {
+    message: 'Las contraseñas no coinciden',
+    path: ['confirm_password'],
+  })
+
+type LoginValues = z.infer<typeof loginSchema>
+type SignupValues = z.infer<typeof signupSchema>
 
 export function LoginPage() {
   const { session, initializing } = useAuth()
   const location = useLocation()
+  const [mode, setMode] = useState<'login' | 'signup'>('login')
   const [error, setError] = useState<string | null>(null)
-  const form = useForm<FormValues>({
-    resolver: zodResolver(schema),
+  const [info, setInfo] = useState<string | null>(null)
+
+  const loginForm = useForm<LoginValues>({
+    resolver: zodResolver(loginSchema),
     defaultValues: { email: '', password: '' },
+  })
+
+  const signupForm = useForm<SignupValues>({
+    resolver: zodResolver(signupSchema),
+    defaultValues: { full_name: '', email: '', password: '', confirm_password: '' },
   })
 
   if (initializing) {
@@ -32,12 +51,46 @@ export function LoginPage() {
     return <Navigate to={from} replace />
   }
 
-  async function onSubmit(values: FormValues) {
+  async function onLogin(values: LoginValues) {
     setError(null)
-    const { error: signError } = await supabase.auth.signInWithPassword(values)
+    setInfo(null)
+    const { error: signError } = await supabase.auth.signInWithPassword({
+      email: values.email,
+      password: values.password,
+    })
     if (signError) {
       setError('No se pudo iniciar sesión. Verifica el correo y la contraseña.')
     }
+  }
+
+  async function onSignup(values: SignupValues) {
+    setError(null)
+    setInfo(null)
+    const { data, error: signError } = await supabase.auth.signUp({
+      email: values.email,
+      password: values.password,
+      options: {
+        data: { full_name: values.full_name },
+      },
+    })
+    if (signError) {
+      setError(
+        signError.message.includes('already')
+          ? 'Ese correo ya tiene una cuenta. Entra con tu contraseña.'
+          : 'No se pudo crear la cuenta. Revisa el correo o habilita Email en Supabase Auth.',
+      )
+      return
+    }
+    if (data.session) return
+    setInfo('Cuenta creada. Si pide confirmación, revisa tu correo y luego entra.')
+    setMode('login')
+    loginForm.reset({ email: values.email, password: '' })
+  }
+
+  function switchMode(next: 'login' | 'signup') {
+    setMode(next)
+    setError(null)
+    setInfo(null)
   }
 
   return (
@@ -46,20 +99,66 @@ export function LoginPage() {
         <p className="text-xs font-semibold uppercase tracking-wide text-zinc-500">Taller</p>
         <h1 className="mt-1 text-2xl font-semibold text-zinc-900">Sistema para la Confección</h1>
         <p className="mt-2 text-sm text-zinc-500">
-          Ingresa con la cuenta creada por el administrador en Supabase Auth.
+          {mode === 'login'
+            ? 'Entra con tu correo o crea una cuenta nueva.'
+            : 'Crea una cuenta para usar el sistema. El rol inicial será supervisor.'}
         </p>
-        <form className="mt-6 space-y-4" onSubmit={form.handleSubmit(onSubmit)}>
-          <Field label="Correo" error={form.formState.errors.email?.message}>
-            <TextInput type="email" autoComplete="email" {...form.register('email')} />
-          </Field>
-          <Field label="Contraseña" error={form.formState.errors.password?.message}>
-            <TextInput type="password" autoComplete="current-password" {...form.register('password')} />
-          </Field>
-          {error ? <p className="text-sm text-rose-600">{error}</p> : null}
-          <PrimaryButton className="w-full" disabled={form.formState.isSubmitting}>
-            {form.formState.isSubmitting ? 'Entrando…' : 'Entrar'}
-          </PrimaryButton>
-        </form>
+
+        {mode === 'login' ? (
+          <form className="mt-6 space-y-4" onSubmit={loginForm.handleSubmit(onLogin)}>
+            <Field label="Correo" error={loginForm.formState.errors.email?.message}>
+              <TextInput type="email" autoComplete="email" {...loginForm.register('email')} />
+            </Field>
+            <Field label="Contraseña" error={loginForm.formState.errors.password?.message}>
+              <TextInput
+                type="password"
+                autoComplete="current-password"
+                {...loginForm.register('password')}
+              />
+            </Field>
+            {error ? <p className="text-sm text-rose-600">{error}</p> : null}
+            {info ? <p className="text-sm text-emerald-700">{info}</p> : null}
+            <PrimaryButton className="w-full" disabled={loginForm.formState.isSubmitting}>
+              {loginForm.formState.isSubmitting ? 'Entrando…' : 'Entrar'}
+            </PrimaryButton>
+          </form>
+        ) : (
+          <form className="mt-6 space-y-4" onSubmit={signupForm.handleSubmit(onSignup)}>
+            <Field label="Nombre" error={signupForm.formState.errors.full_name?.message}>
+              <TextInput autoComplete="name" {...signupForm.register('full_name')} />
+            </Field>
+            <Field label="Correo" error={signupForm.formState.errors.email?.message}>
+              <TextInput type="email" autoComplete="email" {...signupForm.register('email')} />
+            </Field>
+            <Field label="Contraseña" error={signupForm.formState.errors.password?.message}>
+              <TextInput
+                type="password"
+                autoComplete="new-password"
+                {...signupForm.register('password')}
+              />
+            </Field>
+            <Field label="Confirmar contraseña" error={signupForm.formState.errors.confirm_password?.message}>
+              <TextInput
+                type="password"
+                autoComplete="new-password"
+                {...signupForm.register('confirm_password')}
+              />
+            </Field>
+            {error ? <p className="text-sm text-rose-600">{error}</p> : null}
+            {info ? <p className="text-sm text-emerald-700">{info}</p> : null}
+            <PrimaryButton className="w-full" disabled={signupForm.formState.isSubmitting}>
+              {signupForm.formState.isSubmitting ? 'Creando…' : 'Crear cuenta'}
+            </PrimaryButton>
+          </form>
+        )}
+
+        <button
+          type="button"
+          className="mt-4 w-full text-center text-sm text-zinc-600 hover:text-zinc-900"
+          onClick={() => switchMode(mode === 'login' ? 'signup' : 'login')}
+        >
+          {mode === 'login' ? '¿No tienes cuenta? Crear cuenta' : '¿Ya tienes cuenta? Entrar'}
+        </button>
       </div>
     </div>
   )
