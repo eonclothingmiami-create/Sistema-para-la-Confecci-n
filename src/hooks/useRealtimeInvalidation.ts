@@ -6,6 +6,7 @@ const TABLES = [
   'daily_production_headers',
   'daily_production_entries',
   'operators',
+  'clients',
   'production_orders',
 ] as const
 

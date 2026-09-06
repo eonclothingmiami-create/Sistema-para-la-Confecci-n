@@ -6,17 +6,25 @@ import { useForm } from 'react-hook-form'
 import { Link } from 'react-router-dom'
 import { z } from 'zod'
 import { EmptyState } from '../../components/ui/EmptyState'
-import { Field, PrimaryButton, SecondaryButton, TextArea, TextInput } from '../../components/ui/FormField'
+import {
+  Field,
+  PrimaryButton,
+  SecondaryButton,
+  SelectInput,
+  TextArea,
+  TextInput,
+} from '../../components/ui/FormField'
 import { Modal } from '../../components/ui/Modal'
 import { PageHeader } from '../../components/ui/PageHeader'
+import { formatMinuteRate } from '../../lib/money'
 import { supabase } from '../../lib/supabase'
-import type { GarmentReference } from '../../types/database'
+import type { Client, GarmentReference } from '../../types/database'
 
 const schema = z.object({
   code: z.string().min(1, 'Código requerido'),
   name: z.string().min(2, 'Nombre requerido'),
   garment_type: z.string().optional(),
-  client: z.string().optional(),
+  client_id: z.string().min(1, 'Selecciona un cliente'),
   description: z.string().optional(),
   active: z.boolean(),
 })
@@ -27,7 +35,7 @@ const emptyValues: FormValues = {
   code: '',
   name: '',
   garment_type: '',
-  client: '',
+  client_id: '',
   description: '',
   active: true,
 }
@@ -37,10 +45,22 @@ export function ReferencesPage() {
   const [open, setOpen] = useState(false)
   const [editing, setEditing] = useState<GarmentReference | null>(null)
 
+  const clientsQuery = useQuery({
+    queryKey: ['clients'],
+    queryFn: async () => {
+      const { data, error } = await supabase.from('clients').select('*').order('name')
+      if (error) throw error
+      return data as Client[]
+    },
+  })
+
   const query = useQuery({
     queryKey: ['garment_references'],
     queryFn: async () => {
-      const { data, error } = await supabase.from('garment_references').select('*').order('code')
+      const { data, error } = await supabase
+        .from('garment_references')
+        .select('*, clients(id, name, minute_rate)')
+        .order('code')
       if (error) throw error
       return data as GarmentReference[]
     },
@@ -51,13 +71,16 @@ export function ReferencesPage() {
     defaultValues: emptyValues,
   })
 
+  const selectedClientId = form.watch('client_id')
+  const selectedClient = clientsQuery.data?.find((client) => client.id === selectedClientId)
+
   const save = useMutation({
     mutationFn: async (values: FormValues) => {
       const payload = {
         code: values.code.trim(),
         name: values.name.trim(),
         garment_type: values.garment_type || null,
-        client: values.client || null,
+        client_id: values.client_id,
         description: values.description || null,
         active: values.active,
       }
@@ -88,7 +111,10 @@ export function ReferencesPage() {
 
   function startCreate() {
     setEditing(null)
-    form.reset(emptyValues)
+    form.reset({
+      ...emptyValues,
+      client_id: clientsQuery.data?.find((client) => client.active)?.id ?? '',
+    })
     setOpen(true)
   }
 
@@ -98,18 +124,20 @@ export function ReferencesPage() {
       code: item.code,
       name: item.name,
       garment_type: item.garment_type ?? '',
-      client: item.client ?? '',
+      client_id: item.client_id ?? '',
       description: item.description ?? '',
       active: item.active,
     })
     setOpen(true)
   }
 
+  const activeClients = clientsQuery.data?.filter((client) => client.active || client.id === editing?.client_id)
+
   return (
     <div>
       <PageHeader
         title="Referencias / prendas"
-        description="Cada referencia tiene su propia ruta operacional."
+        description="Cada referencia pertenece a un cliente y usa su valor minuto."
         actions={
           <PrimaryButton onClick={startCreate}>
             <Plus className="h-4 w-4" /> Nueva referencia
@@ -121,7 +149,7 @@ export function ReferencesPage() {
       {!query.isLoading && (query.data?.length ?? 0) === 0 ? (
         <EmptyState
           title="Sin referencias"
-          description="Crea una prenda y luego define su ruta de operaciones."
+          description="Crea una prenda, asígnala a un cliente y luego define su ruta de operaciones."
           action={<PrimaryButton onClick={startCreate}>Crear referencia</PrimaryButton>}
         />
       ) : null}
@@ -135,6 +163,7 @@ export function ReferencesPage() {
                 <th className="px-3 py-2.5">Nombre</th>
                 <th className="px-3 py-2.5">Tipo</th>
                 <th className="px-3 py-2.5">Cliente</th>
+                <th className="px-3 py-2.5">Valor min.</th>
                 <th className="px-3 py-2.5">Estado</th>
                 <th className="px-3 py-2.5" />
               </tr>
@@ -145,7 +174,10 @@ export function ReferencesPage() {
                   <td className="px-3 py-2.5 font-medium text-zinc-900">{item.code}</td>
                   <td className="px-3 py-2.5 text-zinc-700">{item.name}</td>
                   <td className="px-3 py-2.5 text-zinc-600">{item.garment_type || '—'}</td>
-                  <td className="px-3 py-2.5 text-zinc-600">{item.client || '—'}</td>
+                  <td className="px-3 py-2.5 text-zinc-600">{item.clients?.name || '—'}</td>
+                  <td className="px-3 py-2.5 tabular text-zinc-600">
+                    {item.clients ? formatMinuteRate(item.clients.minute_rate) : '—'}
+                  </td>
                   <td className="px-3 py-2.5">{item.active ? 'Activa' : 'Inactiva'}</td>
                   <td className="px-3 py-2.5 text-right whitespace-nowrap">
                     <Link
@@ -192,9 +224,25 @@ export function ReferencesPage() {
             <Field label="Tipo de prenda">
               <TextInput {...form.register('garment_type')} />
             </Field>
-            <Field label="Cliente">
-              <TextInput {...form.register('client')} />
+            <Field label="Cliente" error={form.formState.errors.client_id?.message}>
+              <SelectInput {...form.register('client_id')}>
+                <option value="">Seleccionar…</option>
+                {activeClients?.map((client) => (
+                  <option key={client.id} value={client.id}>
+                    {client.name}
+                  </option>
+                ))}
+              </SelectInput>
             </Field>
+            {selectedClient ? (
+              <p className="text-sm text-zinc-600 sm:col-span-2">
+                Valor minuto vigente:{' '}
+                <span className="font-medium text-zinc-800">{formatMinuteRate(selectedClient.minute_rate)}</span>
+                {Number(selectedClient.minute_rate) === 0
+                  ? ' — aún no está definido. Edítalo en Clientes.'
+                  : ' — se copia a cada lote al crearlo.'}
+              </p>
+            ) : null}
             <div className="sm:col-span-2">
               <Field label="Descripción">
                 <TextArea {...form.register('description')} />

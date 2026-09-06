@@ -1,7 +1,7 @@
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Pencil, Plus, Trash2 } from 'lucide-react'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { z } from 'zod'
 import { EmptyState } from '../../components/ui/EmptyState'
@@ -15,6 +15,7 @@ import {
 } from '../../components/ui/FormField'
 import { Modal } from '../../components/ui/Modal'
 import { PageHeader } from '../../components/ui/PageHeader'
+import { formatMinuteRate } from '../../lib/money'
 import { supabase } from '../../lib/supabase'
 import type { GarmentReference, OrderStatus, ProductionOrder, ReferenceOperation } from '../../types/database'
 
@@ -22,6 +23,7 @@ const schema = z.object({
   order_number: z.string().min(1, 'Número requerido'),
   reference_id: z.string().min(1, 'Selecciona una referencia'),
   total_quantity: z.number().int().positive('Cantidad mayor a 0'),
+  minute_rate: z.number().min(0, 'El valor minuto no puede ser negativo'),
   start_date: z.string().optional(),
   estimated_end_date: z.string().optional(),
   status: z.enum(['pendiente', 'en_proceso', 'terminada', 'pausada']),
@@ -53,7 +55,10 @@ export function OrdersPage() {
   const referencesQuery = useQuery({
     queryKey: ['garment_references'],
     queryFn: async () => {
-      const { data, error } = await supabase.from('garment_references').select('*').order('code')
+      const { data, error } = await supabase
+        .from('garment_references')
+        .select('*, clients(id, name, minute_rate)')
+        .order('code')
       if (error) throw error
       return data as GarmentReference[]
     },
@@ -77,6 +82,7 @@ export function OrdersPage() {
       order_number: '',
       reference_id: '',
       total_quantity: 1,
+      minute_rate: 0,
       start_date: '',
       estimated_end_date: '',
       status: 'pendiente',
@@ -85,6 +91,13 @@ export function OrdersPage() {
   })
 
   const selectedReferenceId = form.watch('reference_id')
+  const selectedReference = referencesQuery.data?.find((item) => item.id === selectedReferenceId)
+  const clientRate = Number(selectedReference?.clients?.minute_rate) || 0
+
+  useEffect(() => {
+    if (!open || editing) return
+    form.setValue('minute_rate', clientRate)
+  }, [clientRate, editing, form, open])
 
   const routeQuery = useQuery({
     queryKey: ['reference_operations', selectedReferenceId],
@@ -111,6 +124,7 @@ export function OrdersPage() {
         estimated_end_date: values.estimated_end_date || null,
         status: values.status,
         notes: values.notes || null,
+        minute_rate: values.minute_rate,
       }
       const conflicting = (query.data ?? []).filter(
         (item) =>
@@ -151,6 +165,7 @@ export function OrdersPage() {
       order_number: '',
       reference_id: referencesQuery.data?.[0]?.id ?? '',
       total_quantity: 1,
+      minute_rate: Number(referencesQuery.data?.[0]?.clients?.minute_rate) || 0,
       start_date: '',
       estimated_end_date: '',
       status: 'pendiente',
@@ -165,6 +180,7 @@ export function OrdersPage() {
       order_number: item.order_number,
       reference_id: item.reference_id,
       total_quantity: item.total_quantity,
+      minute_rate: Number(item.minute_rate) || 0,
       start_date: item.start_date ?? '',
       estimated_end_date: item.estimated_end_date ?? '',
       status: item.status,
@@ -177,7 +193,7 @@ export function OrdersPage() {
     <div>
       <PageHeader
         title="Órdenes / lotes"
-        description="Asigna una referencia a cada lote de producción."
+        description="El valor minuto se copia del cliente al crear el lote y no cambia si ajustas la tarifa anual."
         actions={
           <PrimaryButton onClick={startCreate}>
             <Plus className="h-4 w-4" /> Nueva orden
@@ -201,6 +217,7 @@ export function OrdersPage() {
                 <th className="px-3 py-2.5">Orden</th>
                 <th className="px-3 py-2.5">Referencia</th>
                 <th className="px-3 py-2.5">Cantidad</th>
+                <th className="px-3 py-2.5">Valor min.</th>
                 <th className="px-3 py-2.5">Inicio</th>
                 <th className="px-3 py-2.5">Entrega est.</th>
                 <th className="px-3 py-2.5">Estado</th>
@@ -217,6 +234,7 @@ export function OrdersPage() {
                       : '—'}
                   </td>
                   <td className="px-3 py-2.5 tabular">{item.total_quantity}</td>
+                  <td className="px-3 py-2.5 tabular text-zinc-600">{formatMinuteRate(item.minute_rate)}</td>
                   <td className="px-3 py-2.5 text-zinc-600">{item.start_date || '—'}</td>
                   <td className="px-3 py-2.5 text-zinc-600">{item.estimated_end_date || '—'}</td>
                   <td className="px-3 py-2.5">{statusLabel[item.status]}</td>
@@ -291,6 +309,22 @@ export function OrdersPage() {
             <Field label="Cantidad total" error={form.formState.errors.total_quantity?.message}>
               <TextInput type="number" min={1} {...form.register('total_quantity', { valueAsNumber: true })} />
             </Field>
+            <Field label="Valor minuto de este lote" error={form.formState.errors.minute_rate?.message}>
+              <TextInput
+                type="number"
+                min={0}
+                step="0.01"
+                {...form.register('minute_rate', { valueAsNumber: true })}
+              />
+            </Field>
+            {selectedReference?.clients ? (
+              <p className="text-sm text-zinc-600 sm:col-span-2">
+                Cliente {selectedReference.clients.name}: tarifa vigente {formatMinuteRate(clientRate)}.
+                {editing
+                  ? ' Este lote ya tiene su propia copia; cámbiala solo si hay una excepción.'
+                  : ' Se copia aquí al elegir la referencia.'}
+              </p>
+            ) : null}
             <Field label="Estado">
               <SelectInput {...form.register('status')}>
                 <option value="pendiente">Pendiente</option>

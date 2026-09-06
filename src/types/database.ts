@@ -23,16 +23,27 @@ export interface Operator {
   updated_at: string
 }
 
+export interface Client {
+  id: string
+  name: string
+  minute_rate: number
+  active: boolean
+  notes: string | null
+  created_at: string
+  updated_at: string
+}
+
 export interface GarmentReference {
   id: string
   code: string
   name: string
   garment_type: string | null
-  client: string | null
+  client_id: string | null
   description: string | null
   active: boolean
   created_at: string
   updated_at: string
+  clients?: Pick<Client, 'id' | 'name' | 'minute_rate'> | null
 }
 
 export interface ReferenceOperation {
@@ -53,6 +64,7 @@ export interface ProductionOrder {
   order_number: string
   reference_id: string
   total_quantity: number
+  minute_rate: number
   start_date: string | null
   estimated_end_date: string | null
   status: OrderStatus

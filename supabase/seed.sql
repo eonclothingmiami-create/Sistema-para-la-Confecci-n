@@ -16,15 +16,25 @@ on conflict (id) do update set
   active = excluded.active,
   notes = excluded.notes;
 
-insert into public.garment_references (id, code, name, garment_type, client, description, active)
+insert into public.clients (id, name, minute_rate, active, notes)
 values
-  ('aaaaaaa1-aaaa-4aaa-8aaa-aaaaaaaaaaa1', 'BL-ROMA', 'Blusa Roma', 'Blusa', 'Casa Roma', 'Ruta operacional de ejemplo', true),
-  ('aaaaaaa2-aaaa-4aaa-8aaa-aaaaaaaaaaa2', 'PN-ANDES', 'Pantalón Andes', 'Pantalón', 'Andes Wear', 'Segunda referencia de ejemplo', true)
+  ('99999991-9999-4999-8999-999999999991', 'Casa Roma', 80, true, 'Valor minuto de ejemplo'),
+  ('99999992-9999-4999-8999-999999999992', 'Andes Wear', 95, true, 'Valor minuto de ejemplo')
+on conflict (id) do update set
+  name = excluded.name,
+  minute_rate = excluded.minute_rate,
+  active = excluded.active,
+  notes = excluded.notes;
+
+insert into public.garment_references (id, code, name, garment_type, client_id, description, active)
+values
+  ('aaaaaaa1-aaaa-4aaa-8aaa-aaaaaaaaaaa1', 'BL-ROMA', 'Blusa Roma', 'Blusa', '99999991-9999-4999-8999-999999999991', 'Ruta operacional de ejemplo', true),
+  ('aaaaaaa2-aaaa-4aaa-8aaa-aaaaaaaaaaa2', 'PN-ANDES', 'Pantalón Andes', 'Pantalón', '99999992-9999-4999-8999-999999999992', 'Segunda referencia de ejemplo', true)
 on conflict (id) do update set
   code = excluded.code,
   name = excluded.name,
   garment_type = excluded.garment_type,
-  client = excluded.client,
+  client_id = excluded.client_id,
   description = excluded.description,
   active = excluded.active;
 
@@ -48,15 +58,16 @@ on conflict (id) do update set
   active = excluded.active;
 
 insert into public.production_orders (
-  id, order_number, reference_id, total_quantity, start_date, estimated_end_date, status, notes
+  id, order_number, reference_id, total_quantity, minute_rate, start_date, estimated_end_date, status, notes
 )
 values
-  ('ccccccc1-cccc-4ccc-8ccc-ccccccccccc1', 'LOTE-1001', 'aaaaaaa1-aaaa-4aaa-8aaa-aaaaaaaaaaa1', 2500, current_date - 3, current_date + 7, 'en_proceso', 'Lote Blusa Roma'),
-  ('ccccccc2-cccc-4ccc-8ccc-ccccccccccc2', 'LOTE-1002', 'aaaaaaa2-aaaa-4aaa-8aaa-aaaaaaaaaaa2', 1800, current_date - 1, current_date + 10, 'en_proceso', 'Lote Pantalón Andes')
+  ('ccccccc1-cccc-4ccc-8ccc-ccccccccccc1', 'LOTE-1001', 'aaaaaaa1-aaaa-4aaa-8aaa-aaaaaaaaaaa1', 2500, 80, current_date - 3, current_date + 7, 'en_proceso', 'Lote Blusa Roma'),
+  ('ccccccc2-cccc-4ccc-8ccc-ccccccccccc2', 'LOTE-1002', 'aaaaaaa2-aaaa-4aaa-8aaa-aaaaaaaaaaa2', 1800, 95, current_date - 1, current_date + 10, 'en_proceso', 'Lote Pantalón Andes')
 on conflict (id) do update set
   order_number = excluded.order_number,
   reference_id = excluded.reference_id,
   total_quantity = excluded.total_quantity,
+  minute_rate = excluded.minute_rate,
   start_date = excluded.start_date,
   estimated_end_date = excluded.estimated_end_date,
   status = excluded.status,
