@@ -20,6 +20,7 @@ import {
   expectedUnitsPerHour,
   formatMinutes,
   formatPercent,
+  mermaPercent,
   rollupOperatorDays,
   todayISO,
 } from '../../lib/efficiency'
@@ -184,6 +185,7 @@ export function OperatorProfilePage() {
           number: operation?.operation_number ?? 0,
           name: operation?.operation_name ?? 'Operación',
           units: Number(row.delivered_units),
+          defective: Number(row.defective_units),
           minutes: Number(row.delivered_minutes),
           standard: Number(row.standard_minutes),
         }
@@ -261,7 +263,10 @@ export function OperatorProfilePage() {
             <Stat label="Eficiencia del periodo" value={formatPercent(period.efficiency)} />
             <Stat label="Minutos producidos" value={formatMinutes(period.minutes)} />
             <Stat label="Unidades" value={String(period.units)} />
-            <Stat label="Defectuosas" value={String(period.defective)} />
+            <Stat
+              label="Defectuosas"
+              value={`${period.defective} · ${formatPercent(mermaPercent(period.defective, period.units))}`}
+            />
             <Stat label="Días con captura" value={String(period.days)} />
           </div>
 
@@ -279,7 +284,8 @@ export function OperatorProfilePage() {
               </div>
               <p className="mb-3 text-sm text-zinc-600">
                 {formatMinutes(lastDay.total_delivered_minutes)} min /{' '}
-                {formatMinutes(lastDay.installed_capacity_minutes)} de meta · {lastDay.total_delivered_units} und
+                {formatMinutes(lastDay.installed_capacity_minutes)} de meta · {lastDay.total_delivered_units} und ·{' '}
+                {lastDay.total_defective_units} def.
               </p>
               {lastDayOps.length === 0 ? (
                 <p className="text-sm text-zinc-500">Sin detalle de operaciones ese día.</p>
@@ -292,7 +298,9 @@ export function OperatorProfilePage() {
                       {item.name}
                       <span className="text-zinc-500">
                         {' '}
-                        ({item.units} und × {item.standard.toFixed(2)} min = {formatMinutes(item.minutes)} min)
+                        ({item.units} und
+                        {item.defective > 0 ? ` / ${item.defective} def.` : ''} × {item.standard.toFixed(2)} min ={' '}
+                        {formatMinutes(item.minutes)} min)
                       </span>
                     </li>
                   ))}
@@ -333,6 +341,7 @@ export function OperatorProfilePage() {
                   <th className="px-3 py-2.5">Lotes</th>
                   <th className="px-3 py-2.5">Prendas</th>
                   <th className="px-3 py-2.5">Unidades</th>
+                  <th className="px-3 py-2.5">Defectuosas</th>
                   <th className="px-3 py-2.5">Minutos</th>
                   <th className="px-3 py-2.5">Eficiencia</th>
                 </tr>
@@ -340,7 +349,7 @@ export function OperatorProfilePage() {
               <tbody>
                 {days.length === 0 ? (
                   <tr>
-                    <td colSpan={6} className="px-3 py-8 text-center text-zinc-500">
+                    <td colSpan={7} className="px-3 py-8 text-center text-zinc-500">
                       Sin historial en el rango.
                     </td>
                   </tr>
@@ -351,6 +360,7 @@ export function OperatorProfilePage() {
                       <td className="px-3 py-2.5">{item.order_numbers.join(', ')}</td>
                       <td className="px-3 py-2.5 text-zinc-600">{item.reference_labels.join(' · ')}</td>
                       <td className="px-3 py-2.5 tabular">{item.total_delivered_units}</td>
+                      <td className="px-3 py-2.5 tabular">{item.total_defective_units}</td>
                       <td className="px-3 py-2.5 tabular">{formatMinutes(item.total_delivered_minutes)}</td>
                       <td className="px-3 py-2.5">
                         <StatusBadge value={item.efficiency_percentage} />
@@ -375,13 +385,14 @@ export function OperatorProfilePage() {
                   <th className="px-3 py-2.5">Min/und</th>
                   <th className="px-3 py-2.5">Und/hora 100%</th>
                   <th className="px-3 py-2.5">Unidades</th>
+                  <th className="px-3 py-2.5">Defectuosas</th>
                   <th className="px-3 py-2.5">Minutos</th>
                 </tr>
               </thead>
               <tbody>
                 {operationMix.length === 0 ? (
                   <tr>
-                    <td colSpan={7} className="px-3 py-8 text-center text-zinc-500">
+                    <td colSpan={8} className="px-3 py-8 text-center text-zinc-500">
                       Sin operaciones en el rango.
                     </td>
                   </tr>
@@ -394,6 +405,7 @@ export function OperatorProfilePage() {
                       <td className="px-3 py-2.5 tabular">{item.standard.toFixed(2)}</td>
                       <td className="px-3 py-2.5 tabular">{expectedUnitsPerHour(item.standard).toFixed(0)}</td>
                       <td className="px-3 py-2.5 tabular">{item.units}</td>
+                      <td className="px-3 py-2.5 tabular">{item.defective}</td>
                       <td className="px-3 py-2.5 tabular">{formatMinutes(item.minutes)}</td>
                     </tr>
                   ))

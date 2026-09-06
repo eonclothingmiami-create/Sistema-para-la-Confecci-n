@@ -18,6 +18,7 @@ import {
   aggregateOperatorsByDay,
   formatMinutes,
   formatPercent,
+  mermaPercent,
   overallEfficiency,
   todayISO,
 } from '../../lib/efficiency'
@@ -70,6 +71,8 @@ export function DashboardPage() {
   )
   const general = overallEfficiency(summaries)
   const minutes = summaries.reduce((sum, item) => sum + item.total_delivered_minutes, 0)
+  const units = summaries.reduce((sum, item) => sum + item.total_delivered_units, 0)
+  const defective = summaries.reduce((sum, item) => sum + item.total_defective_units, 0)
   const below = summaries.filter((item) => item.status === 'red').length
 
   return (
@@ -84,11 +87,16 @@ export function DashboardPage() {
         }
       />
 
-      <div className="mb-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="mb-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
         <Kpi icon={Activity} label="Eficiencia general" value={formatPercent(general)} />
         <Kpi icon={Clock3} label="Minutos entregados" value={formatMinutes(minutes)} />
         <Kpi icon={Users} label="Operarios activos hoy" value={String(summaries.length)} />
         <Kpi icon={TriangleAlert} label="Operarios bajo meta" value={String(below)} />
+        <Kpi
+          icon={TriangleAlert}
+          label="Merma del día"
+          value={`${defective} · ${formatPercent(mermaPercent(defective, units))}`}
+        />
       </div>
 
       {operatorRows.error ? (
@@ -104,6 +112,7 @@ export function DashboardPage() {
               <th className="px-3 py-2.5">Operario</th>
               <th className="px-3 py-2.5">Min. entregados</th>
               <th className="px-3 py-2.5">Capacidad</th>
+              <th className="px-3 py-2.5">Defectuosas</th>
               <th className="px-3 py-2.5">Eficiencia</th>
               <th className="px-3 py-2.5">Estado</th>
             </tr>
@@ -111,7 +120,7 @@ export function DashboardPage() {
           <tbody>
             {summaries.length === 0 ? (
               <tr>
-                <td colSpan={5} className="px-3 py-8 text-center text-zinc-500">
+                <td colSpan={6} className="px-3 py-8 text-center text-zinc-500">
                   Sin registros para esta fecha.
                 </td>
               </tr>
@@ -125,6 +134,7 @@ export function DashboardPage() {
                   </td>
                   <td className="px-3 py-2.5 tabular">{formatMinutes(item.total_delivered_minutes)}</td>
                   <td className="px-3 py-2.5 tabular">{formatMinutes(item.installed_capacity_minutes)}</td>
+                  <td className="px-3 py-2.5 tabular">{item.total_defective_units}</td>
                   <td className="px-3 py-2.5 tabular font-semibold">
                     {formatPercent(item.efficiency_percentage)}
                   </td>

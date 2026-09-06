@@ -153,6 +153,7 @@ export function ProductionPage() {
   const save = useMutation({
     mutationFn: async () => {
       if (!operatorId || !orderId) throw new Error('Selecciona operario y orden')
+      if (drafts.length === 0) throw new Error('Agrega al menos una operación al cuadro')
       const headerPayload = {
         production_date: date,
         operator_id: operatorId,
@@ -369,6 +370,7 @@ export function ProductionPage() {
                 <th className="px-3 py-2.5">Tiempo operac.</th>
                 <th className="px-3 py-2.5">Cantidad lote</th>
                 <th className="px-3 py-2.5">Und. entregadas</th>
+                <th className="px-3 py-2.5">Und. defectuosas</th>
                 <th className="px-3 py-2.5">Total min. entregados</th>
                 <th className="px-3 py-2.5">Und/hora 100%</th>
                 <th className="px-3 py-2.5">Novedades</th>
@@ -396,6 +398,18 @@ export function ProductionPage() {
                         onChange={(e) =>
                           updateDraft(draft.reference_operation_id, {
                             delivered_units: Number(e.target.value) || 0,
+                          })
+                        }
+                      />
+                    </td>
+                    <td className="px-3 py-2">
+                      <TextInput
+                        type="number"
+                        min={0}
+                        value={draft.defective_units}
+                        onChange={(e) =>
+                          updateDraft(draft.reference_operation_id, {
+                            defective_units: Number(e.target.value) || 0,
                           })
                         }
                       />
@@ -439,7 +453,7 @@ export function ProductionPage() {
 
       <div className="mt-4 flex flex-wrap items-center gap-3">
         <PrimaryButton
-          disabled={!operatorId || !orderId || save.isPending}
+          disabled={!operatorId || !orderId || drafts.length === 0 || save.isPending}
           onClick={() => {
             setMessage(null)
             void save.mutate()
@@ -447,7 +461,11 @@ export function ProductionPage() {
         >
           {save.isPending ? 'Guardando…' : 'Guardar captura'}
         </PrimaryButton>
-        {message ? <p className="text-sm text-zinc-600">{message}</p> : null}
+        {drafts.length === 0 && operatorId && orderId ? (
+          <p className="text-sm text-zinc-500">Agrega al menos una operación al cuadro para guardar.</p>
+        ) : message ? (
+          <p className="text-sm text-zinc-600">{message}</p>
+        ) : null}
       </div>
       <p className="mt-3 max-w-3xl text-xs text-zinc-500">
         El nº de operación identifica el proceso de esa prenda (ej. 17 = Filetear costados). El tiempo

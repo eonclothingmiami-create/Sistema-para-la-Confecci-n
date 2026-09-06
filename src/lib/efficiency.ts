@@ -217,3 +217,10 @@ export function hourlyPerformancePercent(deliveredUnits: number, standardMinutes
   if (expected <= 0) return 0
   return (Number(deliveredUnits || 0) / expected) * 100
 }
+
+/** Merma de calidad: defectuosas / entregadas. No entra en la eficiencia. */
+export function mermaPercent(defectiveUnits: number, deliveredUnits: number): number {
+  const delivered = Number(deliveredUnits || 0)
+  if (delivered <= 0) return 0
+  return (Number(defectiveUnits || 0) / delivered) * 100
+}

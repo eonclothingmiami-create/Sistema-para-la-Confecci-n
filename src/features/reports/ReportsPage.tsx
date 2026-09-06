@@ -5,7 +5,7 @@ import { Link } from 'react-router-dom'
 import { Field, PrimaryButton, SelectInput, TextInput } from '../../components/ui/FormField'
 import { PageHeader } from '../../components/ui/PageHeader'
 import { StatusBadge } from '../../components/ui/StatusBadge'
-import { aggregateOperatorsByDay, formatMinutes, formatPercent, todayISO } from '../../lib/efficiency'
+import { aggregateOperatorsByDay, formatMinutes, formatPercent, mermaPercent, todayISO } from '../../lib/efficiency'
 import { supabase } from '../../lib/supabase'
 import type {
   DailyOperatorEfficiency,
@@ -101,6 +101,7 @@ export function ReportsPage() {
   const rows = summaryQuery.data ?? []
   const ranking = useMemo(() => aggregateOperatorsByDay(rows), [rows])
   const totalUnits = rows.reduce((sum, row) => sum + Number(row.total_delivered_units), 0)
+  const totalDefective = rows.reduce((sum, row) => sum + Number(row.total_defective_units), 0)
   const totalMinutes = rows.reduce((sum, row) => sum + Number(row.total_delivered_minutes), 0)
   const avgEfficiency =
     ranking.length > 0
@@ -193,9 +194,10 @@ export function ReportsPage() {
         </Field>
       </div>
 
-      <div className="mb-5 grid gap-3 sm:grid-cols-3">
+      <div className="mb-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <Stat label="Eficiencia promedio" value={formatPercent(avgEfficiency)} />
         <Stat label="Unidades entregadas" value={String(totalUnits)} />
+        <Stat label="Defectuosas" value={`${totalDefective} · ${formatPercent(mermaPercent(totalDefective, totalUnits))}`} />
         <Stat label="Minutos producidos" value={formatMinutes(totalMinutes)} />
       </div>
 
@@ -206,6 +208,9 @@ export function ReportsPage() {
             <tr>
               <th className="px-3 py-2">#</th>
               <th className="px-3 py-2">Operario</th>
+              <th className="px-3 py-2">Unidades</th>
+              <th className="px-3 py-2">Defectuosas</th>
+              <th className="px-3 py-2">Merma</th>
               <th className="px-3 py-2">Minutos</th>
               <th className="px-3 py-2">Eficiencia</th>
             </tr>
@@ -219,6 +224,11 @@ export function ReportsPage() {
                     {item.operator_name}
                   </Link>
                 </td>
+                <td className="px-3 py-2 tabular">{item.total_delivered_units}</td>
+                <td className="px-3 py-2 tabular">{item.total_defective_units}</td>
+                <td className="px-3 py-2 tabular">
+                  {formatPercent(mermaPercent(item.total_defective_units, item.total_delivered_units))}
+                </td>
                 <td className="px-3 py-2 tabular">{formatMinutes(item.total_delivered_minutes)}</td>
                 <td className="px-3 py-2">
                   <StatusBadge value={item.efficiency_percentage} />
@@ -227,7 +237,7 @@ export function ReportsPage() {
             ))}
             {ranking.length === 0 ? (
               <tr>
-                <td colSpan={4} className="px-3 py-6 text-center text-zinc-500">
+                <td colSpan={7} className="px-3 py-6 text-center text-zinc-500">
                   Sin datos en el rango.
                 </td>
               </tr>
