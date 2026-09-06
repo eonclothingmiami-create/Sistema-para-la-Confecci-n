@@ -6,11 +6,14 @@ import { PageHeader } from '../../components/ui/PageHeader'
 import { StatusBadge } from '../../components/ui/StatusBadge'
 import {
   DEFAULT_CAPACITY,
+  MINUTES_PER_HOUR,
+  capacityFromWorkedHours,
   deliveredMinutes,
   expectedUnitsPerHour,
   formatMinutes,
   formatPercent,
   hourlyPerformancePercent,
+  hoursFromCapacity,
   todayISO,
 } from '../../lib/efficiency'
 import { queryClient } from '../../lib/query-client'
@@ -35,6 +38,7 @@ export function ProductionPage() {
   const [operatorId, setOperatorId] = useState('')
   const [orderId, setOrderId] = useState('')
   const [capacity, setCapacity] = useState(DEFAULT_CAPACITY)
+  const [workedHours, setWorkedHours] = useState('')
   const [startTime, setStartTime] = useState('')
   const [endTime, setEndTime] = useState('')
   const [headerNotes, setHeaderNotes] = useState('')
@@ -120,12 +124,15 @@ export function ProductionPage() {
     )
     setAddOperationId('')
     if (existing?.header) {
-      setCapacity(Number(existing.header.installed_capacity_minutes))
+      const savedCapacity = Number(existing.header.installed_capacity_minutes)
+      setCapacity(savedCapacity)
+      setWorkedHours(savedCapacity > 0 ? String(hoursFromCapacity(savedCapacity)) : '')
       setStartTime(existing.header.start_time?.slice(0, 5) ?? '')
       setEndTime(existing.header.end_time?.slice(0, 5) ?? '')
       setHeaderNotes(existing.header.notes ?? '')
     } else {
       setCapacity(DEFAULT_CAPACITY)
+      setWorkedHours('')
       setStartTime('')
       setEndTime('')
       setHeaderNotes('')
@@ -273,13 +280,37 @@ export function ProductionPage() {
             }
           />
         </Field>
+        <Field label="Horas trabajadas">
+          <TextInput
+            type="number"
+            min={0}
+            step="0.25"
+            placeholder="Ej. 7.5 si se fue antes"
+            value={workedHours}
+            onChange={(e) => {
+              const raw = e.target.value
+              setWorkedHours(raw)
+              const hours = Number(raw)
+              setCapacity(hours > 0 ? capacityFromWorkedHours(hours) : DEFAULT_CAPACITY)
+            }}
+          />
+          <span className="mt-1 block text-xs text-zinc-500">
+            {Number(workedHours) > 0
+              ? `${workedHours} h × ${MINUTES_PER_HOUR} = ${formatMinutes(capacity)} min`
+              : `Vacío = jornada completa ${DEFAULT_CAPACITY} min. La fórmula es horas × ${MINUTES_PER_HOUR}.`}
+          </span>
+        </Field>
         <Field label="Meta / capacidad instalada del día (min)">
           <TextInput
             type="number"
             min={1}
             step="0.01"
             value={capacity}
-            onChange={(e) => setCapacity(Number(e.target.value) || 0)}
+            onChange={(e) => {
+              const next = Number(e.target.value) || 0
+              setCapacity(next)
+              setWorkedHours(next > 0 ? String(hoursFromCapacity(next)) : '')
+            }}
           />
         </Field>
         <Field label="Hora inicio">
@@ -427,7 +458,7 @@ export function ProductionPage() {
       <p className="mt-3 max-w-3xl text-xs text-zinc-500">
         El nº de operación identifica el proceso de esa prenda (ej. 17 = Filetear costados). El tiempo
         sale de la ruta de la referencia. Minutos = tiempo × unidades. Eficiencia del día = suma /
-        capacidad (510).
+        capacidad (horas trabajadas × 60; por defecto {DEFAULT_CAPACITY}).
       </p>
 
       <div className="mt-4">

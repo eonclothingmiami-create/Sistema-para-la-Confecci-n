@@ -5,8 +5,18 @@ import type {
 } from '../types/database'
 
 export const DEFAULT_CAPACITY = 510
+export const MINUTES_PER_HOUR = 60
 export const META_EFFICIENCY_PERCENT = 70
 export const WATCH_EFFICIENCY_PERCENT = 60
+
+export function capacityFromWorkedHours(hours: number): number {
+  return Number((Number(hours) * MINUTES_PER_HOUR).toFixed(2))
+}
+
+export function hoursFromCapacity(minutes: number): number {
+  if (minutes <= 0) return 0
+  return Number((Number(minutes) / MINUTES_PER_HOUR).toFixed(4))
+}
 
 export function efficiencyStatus(value: number): EfficiencyStatus {
   if (value >= META_EFFICIENCY_PERCENT) return 'green'
