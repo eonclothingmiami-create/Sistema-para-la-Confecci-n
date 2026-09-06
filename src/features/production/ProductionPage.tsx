@@ -6,7 +6,6 @@ import { PageHeader } from '../../components/ui/PageHeader'
 import { StatusBadge } from '../../components/ui/StatusBadge'
 import {
   DEFAULT_CAPACITY,
-  MINUTES_PER_HOUR,
   capacityFromWorkedHours,
   deliveredMinutes,
   expectedUnitsPerHour,
@@ -294,11 +293,6 @@ export function ProductionPage() {
               setCapacity(hours > 0 ? capacityFromWorkedHours(hours) : DEFAULT_CAPACITY)
             }}
           />
-          <span className="mt-1 block text-xs text-zinc-500">
-            {Number(workedHours) > 0
-              ? `${workedHours} h × ${MINUTES_PER_HOUR} = ${formatMinutes(capacity)} min`
-              : `Vacío = jornada completa ${DEFAULT_CAPACITY} min. La fórmula es horas × ${MINUTES_PER_HOUR}.`}
-          </span>
         </Field>
         <Field label="Meta / capacidad instalada del día (min)">
           <TextInput
