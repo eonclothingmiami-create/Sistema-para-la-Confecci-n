@@ -74,11 +74,20 @@ export function LoginPage() {
       },
     })
     if (signError) {
-      setError(
-        signError.message.includes('already')
-          ? 'Ese correo ya tiene una cuenta. Entra con tu contraseña.'
-          : 'No se pudo crear la cuenta. Revisa el correo o habilita Email en Supabase Auth.',
-      )
+      const raw = signError.message || ''
+      if (/already|registered|exists/i.test(raw)) {
+        setError('Ese correo ya tiene una cuenta. Entra con tu contraseña.')
+      } else if (/confirm|confirmation email|error sending/i.test(raw)) {
+        setError(
+          'Supabase no pudo enviar el correo de confirmación. En Authentication → Providers → Email desactiva “Confirm email”.',
+        )
+      } else if (/signups? not allowed|disabled/i.test(raw)) {
+        setError('El registro está desactivado en Supabase Auth. Habilita Email signups.')
+      } else if (/captcha/i.test(raw)) {
+        setError('Auth pide captcha. Desactívalo en Authentication → Bot and Abuse Protection.')
+      } else {
+        setError(raw)
+      }
       return
     }
     if (data.session) return
