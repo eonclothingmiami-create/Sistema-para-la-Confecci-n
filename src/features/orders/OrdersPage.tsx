@@ -16,7 +16,7 @@ import {
 import { Modal } from '../../components/ui/Modal'
 import { PageHeader } from '../../components/ui/PageHeader'
 import { supabase } from '../../lib/supabase'
-import type { GarmentReference, OrderStatus, ProductionOrder } from '../../types/database'
+import type { GarmentReference, OrderStatus, ProductionOrder, ReferenceOperation } from '../../types/database'
 
 const schema = z.object({
   order_number: z.string().min(1, 'Número requerido'),
@@ -73,6 +73,23 @@ export function OrdersPage() {
       estimated_end_date: '',
       status: 'pendiente',
       notes: '',
+    },
+  })
+
+  const selectedReferenceId = form.watch('reference_id')
+
+  const routeQuery = useQuery({
+    queryKey: ['reference_operations', selectedReferenceId],
+    enabled: Boolean(selectedReferenceId),
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('reference_operations')
+        .select('*')
+        .eq('reference_id', selectedReferenceId)
+        .eq('active', true)
+        .order('operation_number')
+      if (error) throw error
+      return data as ReferenceOperation[]
     },
   })
 
@@ -229,6 +246,32 @@ export function OrdersPage() {
                 ))}
               </SelectInput>
             </Field>
+            {selectedReferenceId ? (
+              <div className="rounded-lg border border-zinc-200 bg-zinc-50 p-3 text-sm sm:col-span-2">
+                <p className="mb-2 text-xs font-medium text-zinc-600">
+                  Esta orden llevará la ruta de esa prenda en todos los cálculos
+                </p>
+                {(routeQuery.data?.length ?? 0) === 0 ? (
+                  <p className="text-amber-700">
+                    Esta referencia aún no tiene operaciones. Defínelas en Referencias → Ruta antes de capturar.
+                  </p>
+                ) : (
+                  <ul className="space-y-1 text-zinc-700">
+                    {routeQuery.data?.map((operation) => (
+                      <li key={operation.id}>
+                        <span className="font-semibold tabular">{operation.operation_number}</span>
+                        {' — '}
+                        {operation.operation_name}
+                        <span className="text-zinc-500">
+                          {' '}
+                          ({Number(operation.standard_minutes).toFixed(2)} min/und)
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            ) : null}
             <Field label="Cantidad total" error={form.formState.errors.total_quantity?.message}>
               <TextInput type="number" min={1} {...form.register('total_quantity', { valueAsNumber: true })} />
             </Field>
