@@ -104,3 +104,20 @@ export function overallEfficiency(summaries: OperatorDailySummary[]): number {
 export function deliveredMinutes(standardMinutes: number, units: number): number {
   return Number(standardMinutes) * Number(units || 0)
 }
+
+/** Unidades teóricas a 100% en una hora: 60 / tiempo_operación */
+export function expectedUnitsPerHour(standardMinutes: number): number {
+  const time = Number(standardMinutes)
+  if (time <= 0) return 0
+  return 60 / time
+}
+
+/**
+ * Rendimiento vs la hora a 100%.
+ * Ejemplo: 60 / 0.50 = 120 und/hora; 80 entregadas → 66.7%.
+ */
+export function hourlyPerformancePercent(deliveredUnits: number, standardMinutes: number): number {
+  const expected = expectedUnitsPerHour(standardMinutes)
+  if (expected <= 0) return 0
+  return (Number(deliveredUnits || 0) / expected) * 100
+}

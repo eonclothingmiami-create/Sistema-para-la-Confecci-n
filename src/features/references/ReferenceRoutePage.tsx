@@ -138,7 +138,7 @@ export function ReferenceRoutePage() {
       </Link>
       <PageHeader
         title={reference ? `Ruta · ${reference.code} ${reference.name}` : 'Ruta operacional'}
-        description="Los tiempos estándar son minutos por unidad y pueden cambiar entre prendas."
+        description="El nº de operación es el código del proceso en esta prenda (ej. 17 = Filetear costados). El mismo nombre puede existir en otra referencia con otro número y otro tiempo."
         actions={
           <PrimaryButton onClick={startCreate}>
             <Plus className="h-4 w-4" /> Agregar operación
@@ -159,8 +159,8 @@ export function ReferenceRoutePage() {
           <table className="min-w-full text-sm">
             <thead className="bg-zinc-50 text-left text-xs uppercase tracking-wide text-zinc-500">
               <tr>
-                <th className="px-3 py-2.5">Nº</th>
-                <th className="px-3 py-2.5">Operación</th>
+                <th className="px-3 py-2.5">Nº operación</th>
+                <th className="px-3 py-2.5">Proceso</th>
                 <th className="px-3 py-2.5">Máquina</th>
                 <th className="px-3 py-2.5">Min / und</th>
                 <th className="px-3 py-2.5">Estado</th>
@@ -204,15 +204,21 @@ export function ReferenceRoutePage() {
           }}
         >
           <form className="grid gap-3 sm:grid-cols-2" onSubmit={form.handleSubmit((v) => save.mutate(v))}>
-            <Field label="Número" error={form.formState.errors.operation_number?.message}>
+            <Field
+              label="Nº de operación"
+              error={form.formState.errors.operation_number?.message}
+            >
               <TextInput type="number" min={1} {...form.register('operation_number', { valueAsNumber: true })} />
             </Field>
             <Field label="Orden visual">
               <TextInput type="number" {...form.register('sort_order', { valueAsNumber: true })} />
             </Field>
             <div className="sm:col-span-2">
-              <Field label="Nombre de operación" error={form.formState.errors.operation_name?.message}>
-                <TextInput {...form.register('operation_name')} />
+              <Field
+                label="Proceso (ej. Filetear costados)"
+                error={form.formState.errors.operation_name?.message}
+              >
+                <TextInput placeholder="Filetear costados" {...form.register('operation_name')} />
               </Field>
             </div>
             <Field label="Máquina / tipo">

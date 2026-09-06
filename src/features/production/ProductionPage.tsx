@@ -1,9 +1,18 @@
 import { useMutation, useQuery } from '@tanstack/react-query'
+import { Plus, Trash2 } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
-import { Field, PrimaryButton, SelectInput, TextArea, TextInput } from '../../components/ui/FormField'
+import { Field, PrimaryButton, SecondaryButton, SelectInput, TextArea, TextInput } from '../../components/ui/FormField'
 import { PageHeader } from '../../components/ui/PageHeader'
 import { StatusBadge } from '../../components/ui/StatusBadge'
-import { DEFAULT_CAPACITY, deliveredMinutes, formatMinutes, todayISO } from '../../lib/efficiency'
+import {
+  DEFAULT_CAPACITY,
+  deliveredMinutes,
+  expectedUnitsPerHour,
+  formatMinutes,
+  formatPercent,
+  hourlyPerformancePercent,
+  todayISO,
+} from '../../lib/efficiency'
 import { queryClient } from '../../lib/query-client'
 import { supabase } from '../../lib/supabase'
 import type {
@@ -30,6 +39,7 @@ export function ProductionPage() {
   const [endTime, setEndTime] = useState('')
   const [headerNotes, setHeaderNotes] = useState('')
   const [drafts, setDrafts] = useState<EntryDraft[]>([])
+  const [addOperationId, setAddOperationId] = useState('')
   const [message, setMessage] = useState<string | null>(null)
 
   const operatorsQuery = useQuery({
@@ -98,19 +108,17 @@ export function ProductionPage() {
   })
 
   useEffect(() => {
-    const operations = operationsQuery.data ?? []
     const existing = existingQuery.data
+    const existingRows = existing?.entries ?? []
     setDrafts(
-      operations.map((operation) => {
-        const found = existing?.entries.find((entry) => entry.reference_operation_id === operation.id)
-        return {
-          reference_operation_id: operation.id,
-          delivered_units: found?.delivered_units ?? 0,
-          defective_units: found?.defective_units ?? 0,
-          notes: found?.notes ?? '',
-        }
-      }),
+      existingRows.map((entry) => ({
+        reference_operation_id: entry.reference_operation_id,
+        delivered_units: entry.delivered_units,
+        defective_units: entry.defective_units,
+        notes: entry.notes ?? '',
+      })),
     )
+    setAddOperationId('')
     if (existing?.header) {
       setCapacity(Number(existing.header.installed_capacity_minutes))
       setStartTime(existing.header.start_time?.slice(0, 5) ?? '')
@@ -122,7 +130,7 @@ export function ProductionPage() {
       setEndTime('')
       setHeaderNotes('')
     }
-  }, [operationsQuery.data, existingQuery.data])
+  }, [existingQuery.data, date, operatorId, orderId])
 
   const totals = useMemo(() => {
     const operations = operationsQuery.data ?? []
@@ -169,6 +177,21 @@ export function ProductionPage() {
           .upsert(rows, { onConflict: 'header_id,reference_operation_id' })
         if (entriesError) throw entriesError
       }
+
+      const keepIds = drafts.map((draft) => draft.reference_operation_id)
+      const stale = (existingQuery.data?.entries ?? []).filter(
+        (entry) => !keepIds.includes(entry.reference_operation_id),
+      )
+      if (stale.length > 0) {
+        const { error: deleteError } = await supabase
+          .from('daily_production_entries')
+          .delete()
+          .in(
+            'id',
+            stale.map((entry) => entry.id),
+          )
+        if (deleteError) throw deleteError
+      }
     },
     onSuccess: async () => {
       setMessage('Producción guardada.')
@@ -185,11 +208,34 @@ export function ProductionPage() {
     )
   }
 
+  const availableToAdd = (operationsQuery.data ?? []).filter(
+    (operation) => !drafts.some((draft) => draft.reference_operation_id === operation.id),
+  )
+
+  function addOperationRow() {
+    if (!addOperationId) return
+    if (drafts.some((draft) => draft.reference_operation_id === addOperationId)) return
+    setDrafts((current) => [
+      ...current,
+      {
+        reference_operation_id: addOperationId,
+        delivered_units: 0,
+        defective_units: 0,
+        notes: '',
+      },
+    ])
+    setAddOperationId('')
+  }
+
+  function removeOperationRow(operationId: string) {
+    setDrafts((current) => current.filter((item) => item.reference_operation_id !== operationId))
+  }
+
   return (
     <div>
       <PageHeader
         title="Registro diario de producción"
-        description="Selecciona fecha, operario y lote. Las operaciones se cargan desde la ruta de la referencia."
+        description="Agrega solo las operaciones que hizo el operario, por su nº de proceso (ej. 17 Filetear costados)."
       />
 
       <div className="mb-4 grid gap-3 rounded-xl border border-zinc-200 bg-white p-4 sm:grid-cols-2 lg:grid-cols-4">
@@ -227,7 +273,7 @@ export function ProductionPage() {
             }
           />
         </Field>
-        <Field label="Capacidad instalada (min)">
+        <Field label="Meta / capacidad instalada del día (min)">
           <TextInput
             type="number"
             min={1}
@@ -239,7 +285,7 @@ export function ProductionPage() {
         <Field label="Hora inicio">
           <TextInput type="time" value={startTime} onChange={(e) => setStartTime(e.target.value)} />
         </Field>
-        <Field label="Hora fin">
+        <Field label="Hora salida">
           <TextInput type="time" value={endTime} onChange={(e) => setEndTime(e.target.value)} />
         </Field>
         <Field label="Novedades del día">
@@ -247,71 +293,112 @@ export function ProductionPage() {
         </Field>
       </div>
 
-      <div className="mb-4 flex flex-wrap items-center gap-4 rounded-xl border border-zinc-200 bg-white px-4 py-3">
+      <div className="mb-4 grid gap-3 rounded-xl border border-zinc-200 bg-white px-4 py-3 sm:grid-cols-3">
         <div>
-          <p className="text-xs text-zinc-500">Minutos entregados</p>
+          <p className="text-xs text-zinc-500">Total minutos entregados del día</p>
           <p className="tabular text-lg font-semibold">{formatMinutes(totals.totalMinutes)}</p>
         </div>
         <div>
-          <p className="text-xs text-zinc-500">Capacidad</p>
+          <p className="text-xs text-zinc-500">Capacidad instalada del día</p>
           <p className="tabular text-lg font-semibold">{formatMinutes(capacity)}</p>
         </div>
-        <StatusBadge value={totals.efficiency} />
+        <div>
+          <p className="text-xs text-zinc-500">Eficiencia del día</p>
+          <div className="mt-1">
+            <StatusBadge value={totals.efficiency} />
+          </div>
+        </div>
       </div>
 
       {orderId && (operationsQuery.data?.length ?? 0) === 0 && !operationsQuery.isLoading ? (
-        <p className="mb-4 text-sm text-amber-700">Esta referencia no tiene operaciones activas.</p>
+        <p className="mb-4 text-sm text-amber-700">Esta referencia no tiene operaciones en su ruta.</p>
       ) : null}
 
-      {(operationsQuery.data?.length ?? 0) > 0 ? (
+      {orderId && (operationsQuery.data?.length ?? 0) > 0 ? (
+        <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-end">
+          <div className="min-w-0 flex-1">
+            <Field label="Agregar nº de operación de esta prenda">
+              <SelectInput value={addOperationId} onChange={(e) => setAddOperationId(e.target.value)}>
+                <option value="">Seleccionar proceso…</option>
+                {availableToAdd.map((operation) => (
+                  <option key={operation.id} value={operation.id}>
+                    {operation.operation_number} — {operation.operation_name} ({Number(operation.standard_minutes).toFixed(2)} min)
+                  </option>
+                ))}
+              </SelectInput>
+            </Field>
+          </div>
+          <SecondaryButton type="button" disabled={!addOperationId} onClick={addOperationRow}>
+            <Plus className="h-4 w-4" /> Agregar al cuadro
+          </SecondaryButton>
+        </div>
+      ) : null}
+
+      {drafts.length > 0 ? (
         <div className="overflow-x-auto rounded-xl border border-zinc-200 bg-white">
           <table className="min-w-full text-sm">
             <thead className="bg-zinc-50 text-left text-xs uppercase tracking-wide text-zinc-500">
               <tr>
-                <th className="px-3 py-2.5">Nº</th>
-                <th className="px-3 py-2.5">Operación</th>
-                <th className="px-3 py-2.5">Min/und</th>
+                <th className="px-3 py-2.5">Nº operación</th>
+                <th className="px-3 py-2.5">Proceso</th>
+                <th className="px-3 py-2.5">Tiempo operac.</th>
+                <th className="px-3 py-2.5">Cantidad lote</th>
                 <th className="px-3 py-2.5">Und. entregadas</th>
-                <th className="px-3 py-2.5">Defectuosas</th>
-                <th className="px-3 py-2.5">Min. entregados</th>
+                <th className="px-3 py-2.5">Total min. entregados</th>
+                <th className="px-3 py-2.5">Und/hora 100%</th>
                 <th className="px-3 py-2.5">Novedades</th>
+                <th className="px-3 py-2.5" />
               </tr>
             </thead>
             <tbody>
-              {operationsQuery.data?.map((operation) => {
-                const draft = drafts.find((item) => item.reference_operation_id === operation.id)
-                const minutes = deliveredMinutes(Number(operation.standard_minutes), draft?.delivered_units ?? 0)
+              {drafts.map((draft) => {
+                const operation = operationsQuery.data?.find((item) => item.id === draft.reference_operation_id)
+                const standard = Number(operation?.standard_minutes ?? 0)
+                const delivered = draft.delivered_units
+                const minutes = deliveredMinutes(standard, delivered)
+                const unitsHour = expectedUnitsPerHour(standard)
                 return (
-                  <tr key={operation.id} className="border-t border-zinc-100">
-                    <td className="px-3 py-2 tabular">{operation.operation_number}</td>
-                    <td className="px-3 py-2 font-medium">{operation.operation_name}</td>
-                    <td className="px-3 py-2 tabular">{Number(operation.standard_minutes).toFixed(4)}</td>
+                  <tr key={draft.reference_operation_id} className="border-t border-zinc-100">
+                    <td className="px-3 py-2 tabular font-semibold">{operation?.operation_number ?? '—'}</td>
+                    <td className="px-3 py-2 font-medium">{operation?.operation_name ?? '—'}</td>
+                    <td className="px-3 py-2 tabular">{standard.toFixed(2)}</td>
+                    <td className="px-3 py-2 tabular">{selectedOrder?.total_quantity ?? '—'}</td>
                     <td className="px-3 py-2">
                       <TextInput
                         type="number"
                         min={0}
-                        value={draft?.delivered_units ?? 0}
+                        value={delivered}
                         onChange={(e) =>
-                          updateDraft(operation.id, { delivered_units: Number(e.target.value) || 0 })
-                        }
-                      />
-                    </td>
-                    <td className="px-3 py-2">
-                      <TextInput
-                        type="number"
-                        min={0}
-                        value={draft?.defective_units ?? 0}
-                        onChange={(e) =>
-                          updateDraft(operation.id, { defective_units: Number(e.target.value) || 0 })
+                          updateDraft(draft.reference_operation_id, {
+                            delivered_units: Number(e.target.value) || 0,
+                          })
                         }
                       />
                     </td>
                     <td className="px-3 py-2 tabular font-medium">{formatMinutes(minutes)}</td>
+                    <td className="px-3 py-2 tabular text-zinc-600">
+                      {unitsHour > 0 ? unitsHour.toFixed(0) : '—'}
+                      {delivered > 0 ? (
+                        <span className="mt-0.5 block text-[11px] text-zinc-400">
+                          {formatPercent(hourlyPerformancePercent(delivered, standard))} vs 1h
+                        </span>
+                      ) : null}
+                    </td>
                     <td className="px-3 py-2">
                       <TextInput
-                        value={draft?.notes ?? ''}
-                        onChange={(e) => updateDraft(operation.id, { notes: e.target.value })}
+                        value={draft.notes}
+                        onChange={(e) => updateDraft(draft.reference_operation_id, { notes: e.target.value })}
                       />
+                    </td>
+                    <td className="px-3 py-2">
+                      <button
+                        type="button"
+                        className="text-rose-500 hover:text-rose-700"
+                        onClick={() => removeOperationRow(draft.reference_operation_id)}
+                        title="Quitar del cuadro"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </button>
                     </td>
                   </tr>
                 )
@@ -319,6 +406,10 @@ export function ProductionPage() {
             </tbody>
           </table>
         </div>
+      ) : orderId ? (
+        <p className="mb-4 rounded-xl border border-dashed border-zinc-300 bg-white px-4 py-8 text-center text-sm text-zinc-500">
+          Agrega las operaciones que sí trabajó hoy, por su número (como en el cuadro: 17, 5…).
+        </p>
       ) : null}
 
       <div className="mt-4 flex flex-wrap items-center gap-3">
@@ -333,6 +424,11 @@ export function ProductionPage() {
         </PrimaryButton>
         {message ? <p className="text-sm text-zinc-600">{message}</p> : null}
       </div>
+      <p className="mt-3 max-w-3xl text-xs text-zinc-500">
+        El nº de operación identifica el proceso de esa prenda (ej. 17 = Filetear costados). El tiempo
+        sale de la ruta de la referencia. Minutos = tiempo × unidades. Eficiencia del día = suma /
+        capacidad (510).
+      </p>
 
       <div className="mt-4">
         <Field label="Observaciones adicionales">
