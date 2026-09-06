@@ -15,9 +15,9 @@ La capacidad instalada es diaria por operario (510 minutos por defecto). Si un o
 
 Semáforo:
 
-- Verde: >= 90%
-- Amarillo: >= 75% y < 90%
-- Rojo: < 75%
+- Verde / en meta: >= 70%
+- Amarillo / aceptable: >= 60% y < 70%
+- Rojo / bajo meta: < 60%
 
 ## 1. Crear proyecto en Supabase
 

@@ -5,10 +5,12 @@ import type {
 } from '../types/database'
 
 export const DEFAULT_CAPACITY = 510
+export const META_EFFICIENCY_PERCENT = 70
+export const WATCH_EFFICIENCY_PERCENT = 60
 
 export function efficiencyStatus(value: number): EfficiencyStatus {
-  if (value >= 90) return 'green'
-  if (value >= 75) return 'yellow'
+  if (value >= META_EFFICIENCY_PERCENT) return 'green'
+  if (value >= WATCH_EFFICIENCY_PERCENT) return 'yellow'
   return 'red'
 }
 
