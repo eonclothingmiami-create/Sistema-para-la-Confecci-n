@@ -81,11 +81,8 @@ La app usa `HashRouter`, así que las rutas no se rompen al refrescar.
 
 **Opción Actions:**
 
-1. **Settings → Secrets and variables → Actions** y agrega:
-   - `VITE_SUPABASE_URL`
-   - `VITE_SUPABASE_ANON_KEY`
-2. **Settings → Pages → Source:** GitHub Actions.
-3. El workflow [`.github/workflows/deploy-pages.yml`](.github/workflows/deploy-pages.yml) construye y publica `dist`.
+1. **Settings → Pages → Source:** GitHub Actions.
+2. El workflow [`.github/workflows/deploy-pages.yml`](.github/workflows/deploy-pages.yml) construye `dist` con las claves públicas de `.env.production`.
 
 URL de este repo: `https://eonclothingmiami-create.github.io/Sistema-para-la-Confecci-n/`
 
