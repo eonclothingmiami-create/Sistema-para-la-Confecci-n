@@ -3,6 +3,7 @@ import { AppShell } from './components/layout/AppShell'
 import { LoginPage } from './features/auth/LoginPage'
 import { RequireAuth } from './features/auth/RequireAuth'
 import { DashboardPage } from './features/dashboard/DashboardPage'
+import { OperatorProfilePage } from './features/operators/OperatorProfilePage'
 import { OperatorsPage } from './features/operators/OperatorsPage'
 import { OrdersPage } from './features/orders/OrdersPage'
 import { ProductionPage } from './features/production/ProductionPage'
@@ -26,6 +27,7 @@ export default function App() {
           <Route index element={<DashboardPage />} />
           <Route path="produccion" element={<ProductionPage />} />
           <Route path="operarios" element={<OperatorsPage />} />
+          <Route path="operarios/:id" element={<OperatorProfilePage />} />
           <Route path="referencias" element={<ReferencesPage />} />
           <Route path="referencias/:id/ruta" element={<ReferenceRoutePage />} />
           <Route path="ordenes" element={<OrdersPage />} />

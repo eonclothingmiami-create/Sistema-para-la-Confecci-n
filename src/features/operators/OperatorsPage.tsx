@@ -1,7 +1,8 @@
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Pencil, Plus, Trash2 } from 'lucide-react'
+import { IdCard, Pencil, Plus, Trash2 } from 'lucide-react'
 import { useState } from 'react'
+import { Link } from 'react-router-dom'
 import { useForm } from 'react-hook-form'
 import { z } from 'zod'
 import { EmptyState } from '../../components/ui/EmptyState'
@@ -116,7 +117,7 @@ export function OperatorsPage() {
     <div>
       <PageHeader
         title="Operarios"
-        description="Catálogo de personal del taller."
+        description="Catálogo de personal. Entra a la ficha para ver historial y productividad."
         actions={
           <PrimaryButton onClick={startCreate}>
             <Plus className="h-4 w-4" /> Nuevo operario
@@ -152,7 +153,11 @@ export function OperatorsPage() {
             <tbody>
               {query.data?.map((operator) => (
                 <tr key={operator.id} className="border-t border-zinc-100">
-                  <td className="px-3 py-2.5 font-medium text-zinc-900">{operator.name}</td>
+                  <td className="px-3 py-2.5 font-medium text-zinc-900">
+                    <Link to={`/operarios/${operator.id}`} className="hover:underline">
+                      {operator.name}
+                    </Link>
+                  </td>
                   <td className="px-3 py-2.5 text-zinc-600">{operator.code || '—'}</td>
                   <td className="px-3 py-2.5 text-zinc-600">{operator.document || '—'}</td>
                   <td className="px-3 py-2.5 text-zinc-600">{operator.position || '—'}</td>
@@ -163,6 +168,13 @@ export function OperatorsPage() {
                     </span>
                   </td>
                   <td className="px-3 py-2.5 text-right">
+                    <Link
+                      to={`/operarios/${operator.id}`}
+                      className="mr-2 inline-flex text-zinc-600 hover:text-zinc-900"
+                      title="Ver ficha"
+                    >
+                      <IdCard className="h-4 w-4" />
+                    </Link>
                     <button className="mr-2 text-zinc-500 hover:text-zinc-900" onClick={() => startEdit(operator)}>
                       <Pencil className="h-4 w-4" />
                     </button>

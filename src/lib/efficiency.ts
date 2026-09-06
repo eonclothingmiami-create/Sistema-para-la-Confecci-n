@@ -33,6 +33,90 @@ export function todayISO(): string {
   return local.toISOString().slice(0, 10)
 }
 
+export function daysAgoISO(days: number): string {
+  const date = new Date()
+  date.setDate(date.getDate() - days)
+  const offset = date.getTimezoneOffset()
+  return new Date(date.getTime() - offset * 60_000).toISOString().slice(0, 10)
+}
+
+export interface OperatorDayRollup {
+  production_date: string
+  installed_capacity_minutes: number
+  total_delivered_minutes: number
+  total_delivered_units: number
+  total_defective_units: number
+  efficiency_percentage: number
+  status: EfficiencyStatus
+  order_numbers: string[]
+  reference_labels: string[]
+}
+
+/** Una jornada = max capacidad del día (no se suma 510 por cada lote). */
+export function rollupOperatorDays(rows: DailyOperatorEfficiency[]): OperatorDayRollup[] {
+  const byDate = new Map<
+    string,
+    {
+      production_date: string
+      installed_capacity_minutes: number
+      total_delivered_minutes: number
+      total_delivered_units: number
+      total_defective_units: number
+      order_numbers: Set<string>
+      reference_labels: Set<string>
+    }
+  >()
+
+  for (const row of rows) {
+    const current = byDate.get(row.production_date)
+    const minutes = Number(row.total_delivered_minutes)
+    const units = Number(row.total_delivered_units)
+    const defective = Number(row.total_defective_units)
+    const capacity = Number(row.installed_capacity_minutes)
+    const referenceLabel = `${row.reference_code} · ${row.reference_name}`
+
+    if (!current) {
+      byDate.set(row.production_date, {
+        production_date: row.production_date,
+        installed_capacity_minutes: capacity,
+        total_delivered_minutes: minutes,
+        total_delivered_units: units,
+        total_defective_units: defective,
+        order_numbers: new Set([row.order_number]),
+        reference_labels: new Set([referenceLabel]),
+      })
+      continue
+    }
+
+    current.total_delivered_minutes += minutes
+    current.total_delivered_units += units
+    current.total_defective_units += defective
+    current.installed_capacity_minutes = Math.max(current.installed_capacity_minutes, capacity)
+    current.order_numbers.add(row.order_number)
+    current.reference_labels.add(referenceLabel)
+  }
+
+  return [...byDate.values()]
+    .map((item) => {
+      const efficiency =
+        item.installed_capacity_minutes > 0
+          ? (item.total_delivered_minutes / item.installed_capacity_minutes) * 100
+          : 0
+      return {
+        production_date: item.production_date,
+        installed_capacity_minutes: item.installed_capacity_minutes,
+        total_delivered_minutes: item.total_delivered_minutes,
+        total_delivered_units: item.total_delivered_units,
+        total_defective_units: item.total_defective_units,
+        efficiency_percentage: efficiency,
+        status: efficiencyStatus(efficiency),
+        order_numbers: [...item.order_numbers],
+        reference_labels: [...item.reference_labels],
+      }
+    })
+    .sort((a, b) => a.production_date.localeCompare(b.production_date))
+}
+
 export function aggregateOperatorsByDay(
   rows: DailyOperatorEfficiency[],
 ): OperatorDailySummary[] {

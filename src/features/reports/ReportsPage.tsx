@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query'
 import { Download } from 'lucide-react'
 import { useMemo, useState } from 'react'
+import { Link } from 'react-router-dom'
 import { Field, PrimaryButton, SelectInput, TextInput } from '../../components/ui/FormField'
 import { PageHeader } from '../../components/ui/PageHeader'
 import { StatusBadge } from '../../components/ui/StatusBadge'
@@ -213,7 +214,11 @@ export function ReportsPage() {
             {ranking.map((item, index) => (
               <tr key={item.operator_id} className="border-t border-zinc-100">
                 <td className="px-3 py-2 tabular">{index + 1}</td>
-                <td className="px-3 py-2 font-medium">{item.operator_name}</td>
+                <td className="px-3 py-2 font-medium">
+                  <Link to={`/operarios/${item.operator_id}`} className="hover:underline">
+                    {item.operator_name}
+                  </Link>
+                </td>
                 <td className="px-3 py-2 tabular">{formatMinutes(item.total_delivered_minutes)}</td>
                 <td className="px-3 py-2">
                   <StatusBadge value={item.efficiency_percentage} />

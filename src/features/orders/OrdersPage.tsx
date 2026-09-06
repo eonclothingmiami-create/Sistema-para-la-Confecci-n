@@ -37,6 +37,14 @@ const statusLabel: Record<OrderStatus, string> = {
   pausada: 'Pausada',
 }
 
+function orderSaveErrorMessage(error: unknown): string {
+  const err = error as { code?: string; message?: string }
+  if (err.code === '23505' || /duplicate|unique/i.test(err.message ?? '')) {
+    return 'Ya existe una orden con ese número de lote. Usa otro número o edita la orden existente.'
+  }
+  return err.message || 'No se pudo guardar.'
+}
+
 export function OrdersPage() {
   const queryClient = useQueryClient()
   const [open, setOpen] = useState(false)
@@ -104,32 +112,21 @@ export function OrdersPage() {
         status: values.status,
         notes: values.notes || null,
       }
-      const existingSameNumber = (query.data ?? []).filter(
-        (item) => item.order_number.trim().toLowerCase() === payload.order_number.toLowerCase(),
+      const conflicting = (query.data ?? []).filter(
+        (item) =>
+          item.id !== editing?.id &&
+          item.order_number.trim().toLowerCase() === payload.order_number.toLowerCase(),
       )
-      // #region agent log
-      fetch('http://127.0.0.1:7369/ingest/9f149b20-57f1-4c0a-9600-8d1604ff4e7c',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'62c2ea'},body:JSON.stringify({sessionId:'62c2ea',runId:'pre-fix',hypothesisId:'A',location:'OrdersPage.tsx:save',message:'save order attempt',data:{isEditing:Boolean(editing),editingId:editing?.id??null,orderNumber:payload.order_number,referenceId:payload.reference_id,totalQuantity:payload.total_quantity,status:payload.status,hasStartDate:Boolean(payload.start_date),hasEndDate:Boolean(payload.estimated_end_date),existingSameNumberCount:existingSameNumber.length,existingSameNumberIds:existingSameNumber.map((item)=>item.id)},timestamp:Date.now()})}).catch(()=>{});
-      // #endregion
+      if (conflicting.length > 0) {
+        throw Object.assign(new Error('duplicate order_number'), { code: '23505' })
+      }
       if (editing) {
         const { error } = await supabase.from('production_orders').update(payload).eq('id', editing.id)
-        if (error) {
-          // #region agent log
-          fetch('http://127.0.0.1:7369/ingest/9f149b20-57f1-4c0a-9600-8d1604ff4e7c',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'62c2ea'},body:JSON.stringify({sessionId:'62c2ea',runId:'pre-fix',hypothesisId:'C',location:'OrdersPage.tsx:update',message:'update order failed',data:{code:error.code,message:error.message,details:error.details,hint:error.hint},timestamp:Date.now()})}).catch(()=>{});
-          // #endregion
-          throw error
-        }
+        if (error) throw error
         return
       }
       const { error } = await supabase.from('production_orders').insert(payload)
-      if (error) {
-        // #region agent log
-        fetch('http://127.0.0.1:7369/ingest/9f149b20-57f1-4c0a-9600-8d1604ff4e7c',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'62c2ea'},body:JSON.stringify({sessionId:'62c2ea',runId:'pre-fix',hypothesisId:'A',location:'OrdersPage.tsx:insert',message:'insert order failed',data:{code:error.code,message:error.message,details:error.details,hint:error.hint},timestamp:Date.now()})}).catch(()=>{});
-        // #endregion
-        throw error
-      }
-      // #region agent log
-      fetch('http://127.0.0.1:7369/ingest/9f149b20-57f1-4c0a-9600-8d1604ff4e7c',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'62c2ea'},body:JSON.stringify({sessionId:'62c2ea',runId:'pre-fix',hypothesisId:'E',location:'OrdersPage.tsx:insert',message:'insert order succeeded',data:{orderNumber:payload.order_number},timestamp:Date.now()})}).catch(()=>{});
-      // #endregion
+      if (error) throw error
     },
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ['production_orders'] })
@@ -313,7 +310,9 @@ export function OrdersPage() {
                 <TextArea {...form.register('notes')} />
               </Field>
             </div>
-            {save.error ? <p className="text-sm text-rose-600 sm:col-span-2">No se pudo guardar.</p> : null}
+            {save.error ? (
+              <p className="text-sm text-rose-600 sm:col-span-2">{orderSaveErrorMessage(save.error)}</p>
+            ) : null}
             <div className="flex justify-end gap-2 sm:col-span-2">
               <SecondaryButton type="button" onClick={() => setOpen(false)}>
                 Cancelar

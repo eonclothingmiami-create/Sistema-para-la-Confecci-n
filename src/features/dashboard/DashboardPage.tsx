@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query'
 import { Activity, Clock3, TriangleAlert, Users } from 'lucide-react'
 import { useMemo, useState } from 'react'
+import { Link } from 'react-router-dom'
 import {
   Bar,
   BarChart,
@@ -117,7 +118,11 @@ export function DashboardPage() {
             ) : (
               summaries.map((item) => (
                 <tr key={item.operator_id} className="border-t border-zinc-100">
-                  <td className="px-3 py-2.5 font-medium text-zinc-900">{item.operator_name}</td>
+                  <td className="px-3 py-2.5 font-medium text-zinc-900">
+                    <Link to={`/operarios/${item.operator_id}`} className="hover:underline">
+                      {item.operator_name}
+                    </Link>
+                  </td>
                   <td className="px-3 py-2.5 tabular">{formatMinutes(item.total_delivered_minutes)}</td>
                   <td className="px-3 py-2.5 tabular">{formatMinutes(item.installed_capacity_minutes)}</td>
                   <td className="px-3 py-2.5 tabular font-semibold">
