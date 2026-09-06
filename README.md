@@ -72,14 +72,22 @@ npm run preview
 
 La app usa `HashRouter`, así que las rutas no se rompen al refrescar.
 
-1. Crea el repo `sistema-para-la-confeccion`.
-2. En el repo: **Settings → Secrets and variables → Actions** y agrega:
+**Opción rápida (rama `gh-pages`):**
+
+1. El build compilado se publica en la rama `gh-pages`.
+2. En el repo: **Settings → Pages → Build and deployment → Source:** Deploy from a branch.
+3. Branch: `gh-pages` / folder `/ (root)`.
+4. No elijas `main`: esa rama tiene el código fuente y la página queda en blanco (`main.tsx` 404).
+
+**Opción Actions:**
+
+1. **Settings → Secrets and variables → Actions** y agrega:
    - `VITE_SUPABASE_URL`
    - `VITE_SUPABASE_ANON_KEY`
-3. **Settings → Pages → Source:** GitHub Actions.
-4. El workflow [`.github/workflows/deploy-pages.yml`](.github/workflows/deploy-pages.yml) construye con `GITHUB_PAGES=true` (base `/sistema-para-la-confeccion/`) y publica `dist`.
+2. **Settings → Pages → Source:** GitHub Actions.
+3. El workflow [`.github/workflows/deploy-pages.yml`](.github/workflows/deploy-pages.yml) construye y publica `dist`.
 
-URL esperada: `https://<usuario>.github.io/sistema-para-la-confeccion/`
+URL de este repo: `https://eonclothingmiami-create.github.io/Sistema-para-la-Confecci-n/`
 
 En **Authentication → URL Configuration** de Supabase agrega esa URL a **Site URL** y **Redirect URLs**.
 
