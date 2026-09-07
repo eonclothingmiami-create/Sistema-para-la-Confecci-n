@@ -8,6 +8,7 @@ import {
   Scissors,
   Shirt,
   Users,
+  Wallet,
   X,
 } from 'lucide-react'
 import { useState } from 'react'
@@ -24,6 +25,7 @@ const links = [
   { to: '/referencias', label: 'Referencias', icon: Shirt },
   { to: '/ordenes', label: 'Órdenes', icon: Factory },
   { to: '/reportes', label: 'Este mes', icon: Scissors },
+  { to: '/resultado', label: 'Resultado', icon: Wallet },
 ]
 
 export function AppShell() {

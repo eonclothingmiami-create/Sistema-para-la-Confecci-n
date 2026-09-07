@@ -151,6 +151,29 @@ export interface ProductionEntryCalculation {
   delivered_minutes: number
 }
 
+export type CostEntryType = 'fijo_mes' | 'variable_dia'
+
+export interface CostEntry {
+  id: string
+  entry_type: CostEntryType
+  occurred_on: string
+  category: string
+  amount: number
+  notes: string | null
+  production_order_id: string | null
+  created_at: string
+  updated_at: string
+}
+
+export interface DailyProductionRevenue {
+  production_date: string
+  production_order_id: string
+  order_number: string
+  minute_rate: number
+  delivered_minutes: number
+  revenue: number
+}
+
 export interface OperatorDailySummary {
   operator_id: string
   operator_name: string

@@ -8,6 +8,7 @@ const TABLES = [
   'operators',
   'clients',
   'production_orders',
+  'cost_entries',
 ] as const
 
 export function useRealtimeInvalidation() {

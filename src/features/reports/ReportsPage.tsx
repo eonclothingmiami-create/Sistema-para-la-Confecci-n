@@ -3,7 +3,10 @@ import { Download } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { EfficiencyArea } from '../../components/charts/EfficiencyArea'
 import { RankingBars } from '../../components/charts/RankingBars'
+import { ResultCard } from '../../components/result/ResultCard'
 import { Field, PrimaryButton, SelectInput } from '../../components/ui/FormField'
+import { useMonthResult } from '../../hooks/useMonthResult'
+import { formatMoney, formatSignedMoney } from '../../lib/money'
 import { PageHeader } from '../../components/ui/PageHeader'
 import { StatusBadge } from '../../components/ui/StatusBadge'
 import {
@@ -115,6 +118,15 @@ export function ReportsPage() {
     () => fillDailySeries(from, to, workshopDailySeries(rows)),
     [from, rows, to],
   )
+  const monthMoney = useMonthResult(monthAnchor)
+  const previousMoney = useMonthResult(previousFrom)
+  const moneyDelta =
+    previousMoney.result.revenue > 0 || previousMoney.result.fixedCosts > 0 || previousMoney.result.variableCosts > 0
+      ? monthMoney.result.result - previousMoney.result.result
+      : null
+  const dayMoneyRows = monthMoney.result.days.filter(
+    (item) => item.revenue > 0 || item.variableCosts > 0 || item.allocatedFixed > 0,
+  )
 
   function exportCsv() {
     const header = ['fecha', 'operario', 'orden', 'referencia', 'unidades', 'defectuosas', 'minutos', 'capacidad', 'eficiencia']
@@ -162,6 +174,51 @@ export function ReportsPage() {
           </div>
         }
       />
+
+      <div className="mb-5">
+        <ResultCard
+          title="Resultado del mes"
+          result={monthMoney.result.result}
+          revenue={monthMoney.result.revenue}
+          variableCosts={monthMoney.result.variableCosts}
+          fixedCosts={monthMoney.result.fixedCosts}
+          fixedLabel="Fijos del mes"
+          missingRate={monthMoney.result.missingRate}
+          hasFixed={monthMoney.result.hasFixed}
+          href="/resultado"
+        />
+        {moneyDelta != null ? (
+          <p className={`mt-2 text-sm ${moneyDelta >= 0 ? 'text-emerald-700' : 'text-rose-600'}`}>
+            {moneyDelta >= 0 ? '↑' : '↓'} {formatSignedMoney(moneyDelta)} vs {formatMonthLong(previousFrom)}
+          </p>
+        ) : null}
+      </div>
+
+      {dayMoneyRows.length > 0 ? (
+        <div className="mb-5 overflow-hidden rounded-2xl border border-zinc-200 bg-white">
+          <div className="px-4 py-3 text-sm font-medium text-zinc-800">Día a día</div>
+          <ul>
+            {[...dayMoneyRows].reverse().map((item) => (
+              <li
+                key={item.date}
+                className="flex items-center justify-between gap-3 border-t border-zinc-100 px-4 py-2.5"
+              >
+                <span className="tabular text-sm text-zinc-600">{item.date}</span>
+                <span
+                  className={`tabular text-sm font-medium ${
+                    item.result > 0 ? 'text-emerald-700' : item.result < 0 ? 'text-rose-600' : 'text-zinc-700'
+                  }`}
+                >
+                  {formatSignedMoney(item.result)}
+                </span>
+              </li>
+            ))}
+          </ul>
+          <p className="border-t border-zinc-100 px-4 py-2 text-xs text-zinc-400">
+            Ingreso {formatMoney(monthMoney.result.revenue)} · el día usa fijos prorrateados; el mes usa fijos enteros.
+          </p>
+        </div>
+      ) : null}
 
       <div className="mb-5 grid gap-3 sm:grid-cols-3">
         <div className="rounded-2xl border border-zinc-200 bg-white p-5 sm:col-span-1">

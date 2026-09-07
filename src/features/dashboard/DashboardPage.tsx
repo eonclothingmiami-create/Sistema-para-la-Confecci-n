@@ -2,9 +2,12 @@ import { useQuery } from '@tanstack/react-query'
 import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { WeekDots } from '../../components/charts/WeekDots'
+import { ResultCard } from '../../components/result/ResultCard'
 import { Field, TextInput } from '../../components/ui/FormField'
 import { PageHeader } from '../../components/ui/PageHeader'
 import { StatusBadge } from '../../components/ui/StatusBadge'
+import { useMonthResult } from '../../hooks/useMonthResult'
+import { dayResultFromMonth } from '../../lib/result'
 import {
   aggregateOperatorsByDay,
   fillDailySeries,
@@ -62,6 +65,9 @@ export function DashboardPage() {
   const defective = summaries.reduce((sum, item) => sum + item.total_defective_units, 0)
   const below = summaries.filter((item) => item.status === 'red')
   const merma = mermaPercent(defective, units)
+
+  const monthResult = useMonthResult(date)
+  const todayResult = dayResultFromMonth(monthResult.result, date)
 
   const weekDots = useMemo(() => {
     const series = workshopDailySeries(weekQuery.data ?? [])
@@ -123,6 +129,22 @@ export function DashboardPage() {
           </p>
         ) : null}
       </section>
+
+      {todayResult ? (
+        <div className="mb-6">
+          <ResultCard
+            title="Resultado de hoy"
+            result={todayResult.result}
+            revenue={todayResult.revenue}
+            variableCosts={todayResult.variableCosts}
+            fixedCosts={todayResult.allocatedFixed}
+            fixedLabel="Fijos del día"
+            missingRate={todayResult.missingRate}
+            hasFixed={todayResult.hasFixed}
+            href="/resultado"
+          />
+        </div>
+      ) : null}
 
       <section className="mb-4 overflow-hidden rounded-2xl border border-zinc-200 bg-white">
         {summaries.length === 0 ? (

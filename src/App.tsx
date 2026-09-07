@@ -11,6 +11,7 @@ import { ProductionPage } from './features/production/ProductionPage'
 import { ReferenceRoutePage } from './features/references/ReferenceRoutePage'
 import { ReferencesPage } from './features/references/ReferencesPage'
 import { ReportsPage } from './features/reports/ReportsPage'
+import { ResultadoPage } from './features/result/ResultadoPage'
 
 export default function App() {
   return (
@@ -34,6 +35,7 @@ export default function App() {
           <Route path="referencias/:id/ruta" element={<ReferenceRoutePage />} />
           <Route path="ordenes" element={<OrdersPage />} />
           <Route path="reportes" element={<ReportsPage />} />
+          <Route path="resultado" element={<ResultadoPage />} />
         </Route>
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
