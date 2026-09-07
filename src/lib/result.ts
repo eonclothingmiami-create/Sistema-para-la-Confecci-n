@@ -41,9 +41,14 @@ export interface MonthResult {
   days: DayResult[]
 }
 
-export function workingDaysInMonth(iso: string): number {
+export function isWorkshopDay(date: string, activeDates: Set<string>): boolean {
+  const weekday = new Date(`${date}T00:00:00`).getDay()
+  return weekday !== 0 || activeDates.has(date)
+}
+
+export function workingDaysInMonth(iso: string, activeDates: Set<string> = new Set()): number {
   const days = eachDateISO(startOfMonthISO(iso), endOfMonthISO(iso))
-  return days.filter((date) => new Date(`${date}T00:00:00`).getDay() !== 0).length
+  return days.filter((date) => isWorkshopDay(date, activeDates)).length
 }
 
 export function sumAmounts(entries: CostEntry[]): number {
@@ -66,7 +71,11 @@ export function buildMonthResult(
 ): MonthResult {
   const from = startOfMonthISO(monthIso)
   const to = endOfMonthISO(monthIso)
-  const workingDays = Math.max(1, workingDaysInMonth(monthIso))
+  const activeDates = new Set<string>([
+    ...revenueRows.filter((row) => Number(row.delivered_minutes) > 0).map((row) => row.production_date),
+    ...variableEntries.map((entry) => entry.occurred_on),
+  ])
+  const workingDays = Math.max(1, workingDaysInMonth(monthIso, activeDates))
   const fixedCosts = sumAmounts(fixedEntries)
   const allocatedFixed = fixedCosts / workingDays
   const hasFixed = fixedEntries.some((item) => Number(item.amount) > 0)
@@ -87,8 +96,7 @@ export function buildMonthResult(
     const dayRows = revenueByDate.get(date) ?? []
     const revenue = sumRevenue(dayRows)
     const variableCosts = variableByDate.get(date) ?? 0
-    const isWorkingDay = new Date(`${date}T00:00:00`).getDay() !== 0
-    const dayFixed = isWorkingDay ? allocatedFixed : 0
+    const dayFixed = isWorkshopDay(date, activeDates) ? allocatedFixed : 0
     return {
       date,
       revenue,
