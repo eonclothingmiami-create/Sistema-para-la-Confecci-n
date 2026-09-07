@@ -19,15 +19,23 @@ import { useAuth } from '../../hooks/useAuth'
 import { useRealtimeInvalidation } from '../../hooks/useRealtimeInvalidation'
 import { supabase } from '../../lib/supabase'
 
-const links = [
-  { to: '/', label: 'Dashboard', icon: LayoutDashboard, end: true },
-  { to: '/produccion', label: 'Producción', icon: ClipboardList },
-  { to: '/operarios', label: 'Operarios', icon: Users },
-  { to: '/clientes', label: 'Clientes', icon: Building2 },
-  { to: '/referencias', label: 'Referencias', icon: Shirt },
-  { to: '/ordenes', label: 'Órdenes', icon: Factory },
-  { to: '/reportes', label: 'Este mes', icon: Scissors },
-  { to: '/resultado', label: 'Resultados', icon: Wallet },
+const modules = [
+  {
+    title: 'Operatividad',
+    links: [
+      { to: '/', label: 'Dashboard', icon: LayoutDashboard, end: true },
+      { to: '/produccion', label: 'Producción', icon: ClipboardList },
+      { to: '/operarios', label: 'Operarios', icon: Users },
+      { to: '/clientes', label: 'Clientes', icon: Building2 },
+      { to: '/referencias', label: 'Referencias', icon: Shirt },
+      { to: '/ordenes', label: 'Órdenes', icon: Factory },
+      { to: '/reportes', label: 'Este mes', icon: Scissors },
+    ],
+  },
+  {
+    title: 'Contabilidad',
+    links: [{ to: '/resultado', label: 'Resultados', icon: Wallet }],
+  },
 ]
 
 export function AppShell() {
@@ -56,28 +64,37 @@ export function AppShell() {
             <X className="h-5 w-5" />
           </button>
         </div>
-        <nav className="flex flex-col gap-1 p-3">
-          {links.map((link) => {
-            const Icon = link.icon
-            return (
-              <NavLink
-                key={link.to}
-                to={link.to}
-                end={link.end}
-                onClick={() => setOpen(false)}
-                className={({ isActive }) =>
-                  `flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium ${
-                    isActive
-                      ? 'bg-zinc-900 text-white'
-                      : 'text-zinc-600 hover:bg-zinc-100 hover:text-zinc-900'
-                  }`
-                }
-              >
-                <Icon className="h-4 w-4 shrink-0" />
-                <span className="truncate">{link.label}</span>
-              </NavLink>
-            )
-          })}
+        <nav className="flex flex-col gap-4 overflow-y-auto p-3">
+          {modules.map((module) => (
+            <div key={module.title}>
+              <p className="mb-1 px-3 text-[11px] font-semibold tracking-wide text-zinc-400 uppercase">
+                {module.title}
+              </p>
+              <div className="flex flex-col gap-1">
+                {module.links.map((link) => {
+                  const Icon = link.icon
+                  return (
+                    <NavLink
+                      key={link.to}
+                      to={link.to}
+                      end={link.end}
+                      onClick={() => setOpen(false)}
+                      className={({ isActive }) =>
+                        `flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium ${
+                          isActive
+                            ? 'bg-zinc-900 text-white'
+                            : 'text-zinc-600 hover:bg-zinc-100 hover:text-zinc-900'
+                        }`
+                      }
+                    >
+                      <Icon className="h-4 w-4 shrink-0" />
+                      <span className="truncate">{link.label}</span>
+                    </NavLink>
+                  )
+                })}
+              </div>
+            </div>
+          ))}
         </nav>
       </aside>
 
