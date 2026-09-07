@@ -1,4 +1,12 @@
-export type UserRole = 'admin' | 'supervisor' | 'consulta'
+export type UserRole = 'desarrollador' | 'admin' | 'supervisor' | 'operario' | 'consulta'
+
+export const ROLE_LABELS: Record<UserRole, string> = {
+  desarrollador: 'Desarrollador',
+  admin: 'Administrador',
+  supervisor: 'Supervisor',
+  operario: 'Operario',
+  consulta: 'Consulta',
+}
 export type OrderStatus = 'pendiente' | 'en_proceso' | 'terminada' | 'pausada'
 export type EfficiencyStatus = 'green' | 'yellow' | 'red'
 
@@ -149,6 +157,18 @@ export interface ProductionEntryCalculation {
   defective_units: number
   standard_minutes: number
   delivered_minutes: number
+}
+
+export type WorkshopCalendarKind = 'festivo' | 'cierre' | 'extra'
+export type WorkshopCalendarSource = 'oficial' | 'manual'
+
+export interface WorkshopCalendarEntry {
+  id: string
+  occurred_on: string
+  kind: WorkshopCalendarKind
+  name: string
+  source: WorkshopCalendarSource
+  created_at: string
 }
 
 export type CostEntryType = 'fijo_mes' | 'variable_dia'

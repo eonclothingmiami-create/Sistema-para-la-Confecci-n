@@ -186,6 +186,7 @@ export function ReportsPage() {
           missingRate={monthMoney.result.missingRate}
           hasFixed={monthMoney.result.hasFixed}
           href="/resultado"
+          workingDays={monthMoney.result.workingDays}
         />
         {moneyDelta != null ? (
           <p className={`mt-2 text-sm ${moneyDelta >= 0 ? 'text-emerald-700' : 'text-rose-600'}`}>
@@ -215,7 +216,7 @@ export function ReportsPage() {
             ))}
           </ul>
           <p className="border-t border-zinc-100 px-4 py-2 text-xs text-zinc-400">
-            Ingreso {formatMoney(monthMoney.result.revenue)} · el día usa fijos prorrateados; el mes usa fijos enteros.
+            Ingreso {formatMoney(monthMoney.result.revenue)} · el día usa fijos ÷ {monthMoney.result.workingDays} días laborales; el mes usa fijos enteros.
           </p>
         </div>
       ) : null}

@@ -4,25 +4,11 @@ import { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import type { Profile } from '../types/database'
 
-async function fetchProfile(userId: string): Promise<Profile | null> {
-  const { data, error } = await supabase
-    .from('profiles')
-    .select('*')
-    .eq('id', userId)
-    .maybeSingle()
+async function fetchProfile(): Promise<Profile | null> {
+  const { data, error } = await supabase.rpc('ensure_own_profile')
 
   if (error) throw error
-
-  if (data) return data as Profile
-
-  const { data: created, error: insertError } = await supabase
-    .from('profiles')
-    .insert({ id: userId, role: 'supervisor' })
-    .select('*')
-    .single()
-
-  if (insertError) return null
-  return created as Profile
+  return (data as Profile | null) ?? null
 }
 
 export function useAuth() {
@@ -54,7 +40,7 @@ export function useAuth() {
 
   const profileQuery = useQuery({
     queryKey: ['profile', user?.id],
-    queryFn: () => fetchProfile(user!.id),
+    queryFn: () => fetchProfile(),
     enabled: Boolean(user?.id),
   })
 

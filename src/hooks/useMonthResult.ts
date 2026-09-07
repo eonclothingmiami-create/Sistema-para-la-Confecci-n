@@ -4,6 +4,7 @@ import { ensureMonthFixedCosts } from '../lib/fixedCosts'
 import { buildMonthResult } from '../lib/result'
 import { supabase } from '../lib/supabase'
 import type { CostEntry, DailyProductionRevenue } from '../types/database'
+import { useWorkshopCalendar } from './useWorkshopCalendar'
 
 export function useMonthResult(monthIso: string) {
   const from = startOfMonthISO(monthIso)
@@ -44,9 +45,18 @@ export function useMonthResult(monthIso: string) {
     },
   })
 
-  const result = buildMonthResult(from, revenueQuery.data ?? [], fixedQuery.data ?? [], variableQuery.data ?? [])
-  const loading = revenueQuery.isLoading || fixedQuery.isLoading || variableQuery.isLoading
-  const error = revenueQuery.error || fixedQuery.error || variableQuery.error
+  const calendarQuery = useWorkshopCalendar(from, to)
+
+  const result = buildMonthResult(
+    from,
+    revenueQuery.data ?? [],
+    fixedQuery.data ?? [],
+    variableQuery.data ?? [],
+    calendarQuery.data ?? [],
+  )
+  const loading =
+    revenueQuery.isLoading || fixedQuery.isLoading || variableQuery.isLoading || calendarQuery.isLoading
+  const error = revenueQuery.error || fixedQuery.error || variableQuery.error || calendarQuery.error
 
   return { result, loading, error }
 }

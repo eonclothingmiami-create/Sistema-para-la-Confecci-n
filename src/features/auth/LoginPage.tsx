@@ -91,9 +91,16 @@ export function LoginPage() {
       return
     }
     if (data.session) return
-    setInfo('Cuenta creada. Si pide confirmación, revisa tu correo y luego entra.')
-    setMode('login')
-    loginForm.reset({ email: values.email, password: '' })
+
+    const { error: loginError } = await supabase.auth.signInWithPassword({
+      email: values.email,
+      password: values.password,
+    })
+    if (loginError) {
+      setInfo('Cuenta creada. Entra ahora con tu contraseña.')
+      setMode('login')
+      loginForm.reset({ email: values.email, password: '' })
+    }
   }
 
   function switchMode(next: 'login' | 'signup') {
@@ -109,8 +116,8 @@ export function LoginPage() {
         <h1 className="mt-1 text-2xl font-semibold text-zinc-900">Sistema para la Confección</h1>
         <p className="mt-2 text-sm text-zinc-500">
           {mode === 'login'
-            ? 'Entra con tu correo o crea una cuenta nueva.'
-            : 'Crea una cuenta para usar el sistema. El rol inicial será supervisor.'}
+            ? 'Entra con tu correo o crea la cuenta del taller.'
+            : 'La primera cuenta del taller queda como administrador. Las siguientes entran como operario.'}
         </p>
 
         {mode === 'login' ? (

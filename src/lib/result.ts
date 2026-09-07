@@ -1,5 +1,5 @@
 import { eachDateISO, endOfMonthISO, startOfMonthISO } from './efficiency'
-import type { CostEntry, DailyProductionRevenue } from '../types/database'
+import type { CostEntry, DailyProductionRevenue, WorkshopCalendarEntry } from '../types/database'
 
 export const DEFAULT_FIXED_CATEGORIES = [
   'Arriendo',
@@ -35,20 +35,42 @@ export interface MonthResult {
   revenue: number
   variableCosts: number
   fixedCosts: number
+  allocatedFixed: number
+  workingDays: number
   result: number
   missingRate: boolean
   hasFixed: boolean
   days: DayResult[]
 }
 
-export function isWorkshopDay(date: string, activeDates: Set<string>): boolean {
+export function isWeekday(date: string): boolean {
   const weekday = new Date(`${date}T00:00:00`).getDay()
-  return weekday !== 0 || activeDates.has(date)
+  return weekday >= 1 && weekday <= 5
 }
 
-export function workingDaysInMonth(iso: string, activeDates: Set<string> = new Set()): number {
+export function isWorkshopDay(
+  date: string,
+  activeDates: Set<string> = new Set(),
+  calendar: WorkshopCalendarEntry[] = [],
+): boolean {
+  const extras = calendar.some((item) => item.occurred_on === date && item.kind === 'extra')
+  if (extras || activeDates.has(date)) return true
+
+  const closed = calendar.some(
+    (item) => item.occurred_on === date && (item.kind === 'festivo' || item.kind === 'cierre'),
+  )
+  if (closed) return false
+
+  return isWeekday(date)
+}
+
+export function workingDaysInMonth(
+  iso: string,
+  activeDates: Set<string> = new Set(),
+  calendar: WorkshopCalendarEntry[] = [],
+): number {
   const days = eachDateISO(startOfMonthISO(iso), endOfMonthISO(iso))
-  return days.filter((date) => isWorkshopDay(date, activeDates)).length
+  return days.filter((date) => isWorkshopDay(date, activeDates, calendar)).length
 }
 
 export function sumAmounts(entries: CostEntry[]): number {
@@ -68,6 +90,7 @@ export function buildMonthResult(
   revenueRows: DailyProductionRevenue[],
   fixedEntries: CostEntry[],
   variableEntries: CostEntry[],
+  calendar: WorkshopCalendarEntry[] = [],
 ): MonthResult {
   const from = startOfMonthISO(monthIso)
   const to = endOfMonthISO(monthIso)
@@ -75,7 +98,7 @@ export function buildMonthResult(
     ...revenueRows.filter((row) => Number(row.delivered_minutes) > 0).map((row) => row.production_date),
     ...variableEntries.map((entry) => entry.occurred_on),
   ])
-  const workingDays = Math.max(1, workingDaysInMonth(monthIso, activeDates))
+  const workingDays = Math.max(1, workingDaysInMonth(monthIso, activeDates, calendar))
   const fixedCosts = sumAmounts(fixedEntries)
   const allocatedFixed = fixedCosts / workingDays
   const hasFixed = fixedEntries.some((item) => Number(item.amount) > 0)
@@ -96,7 +119,7 @@ export function buildMonthResult(
     const dayRows = revenueByDate.get(date) ?? []
     const revenue = sumRevenue(dayRows)
     const variableCosts = variableByDate.get(date) ?? 0
-    const dayFixed = isWorkshopDay(date, activeDates) ? allocatedFixed : 0
+    const dayFixed = isWorkshopDay(date, activeDates, calendar) ? allocatedFixed : 0
     return {
       date,
       revenue,
@@ -112,6 +135,8 @@ export function buildMonthResult(
     revenue: sumRevenue(revenueRows),
     variableCosts: sumAmounts(variableEntries),
     fixedCosts,
+    allocatedFixed,
+    workingDays,
     result: sumRevenue(revenueRows) - sumAmounts(variableEntries) - fixedCosts,
     missingRate: hasMissingRate(revenueRows),
     hasFixed,

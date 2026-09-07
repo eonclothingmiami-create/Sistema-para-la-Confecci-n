@@ -11,12 +11,14 @@ import {
   useCreateCostCategory,
   useDeleteCostCategory,
 } from '../../hooks/useCostCategories'
-import { formatMonthLong, startOfMonthISO, todayISO } from '../../lib/efficiency'
+import { endOfMonthISO, formatMonthLong, startOfMonthISO, todayISO } from '../../lib/efficiency'
 import { ensureMonthFixedCosts } from '../../lib/fixedCosts'
 import { formatMoney } from '../../lib/money'
-import { sumAmounts } from '../../lib/result'
+import { sumAmounts, workingDaysInMonth } from '../../lib/result'
 import { supabase } from '../../lib/supabase'
 import type { CostEntry, ProductionOrder } from '../../types/database'
+import { useWorkshopCalendar } from '../../hooks/useWorkshopCalendar'
+import { CalendarPanel } from './CalendarPanel'
 
 const OTHER_CATEGORY = 'Otro'
 
@@ -24,7 +26,7 @@ function isOtherCategory(name: string) {
   return name.trim().toLocaleLowerCase() === OTHER_CATEGORY.toLocaleLowerCase()
 }
 
-type CaptureTab = 'fijos' | 'variables'
+type CaptureTab = 'fijos' | 'variables' | 'calendario'
 
 export function ResultadoPage() {
   const [tab, setTab] = useState<CaptureTab>('fijos')
@@ -32,7 +34,7 @@ export function ResultadoPage() {
   return (
     <div>
       <PageHeader
-        title="Resultados"
+        title="Costos y gastos"
         actions={
           <SegmentedTabs
             value={tab}
@@ -40,11 +42,14 @@ export function ResultadoPage() {
             options={[
               { id: 'fijos', label: 'Fijos del mes' },
               { id: 'variables', label: 'Gastos del día' },
+              { id: 'calendario', label: 'Calendario' },
             ]}
           />
         }
       />
-      {tab === 'fijos' ? <FixedCostsPanel /> : <VariableCostsPanel />}
+      {tab === 'fijos' ? <FixedCostsPanel /> : null}
+      {tab === 'variables' ? <VariableCostsPanel /> : null}
+      {tab === 'calendario' ? <CalendarPanel /> : null}
     </div>
   )
 }
@@ -53,6 +58,7 @@ function FixedCostsPanel() {
   const queryClient = useQueryClient()
   const [month, setMonth] = useState(todayISO().slice(0, 7))
   const occurredOn = startOfMonthISO(`${month}-01`)
+  const calendarQuery = useWorkshopCalendar(occurredOn, endOfMonthISO(occurredOn))
   const categoriesQuery = useCostCategories('fijo_mes')
   const createCategory = useCreateCostCategory('fijo_mes')
   const deleteCategory = useDeleteCostCategory()
@@ -106,6 +112,8 @@ function FixedCostsPanel() {
   }, [catalog, draft, orphanEntries, savedEntries])
 
   const total = rows.reduce((sum, row) => sum + (Number(row.amount) || 0), 0)
+  const workingDays = Math.max(1, workingDaysInMonth(occurredOn, new Set(), calendarQuery.data ?? []))
+  const dailyFixed = total / workingDays
 
   const save = useMutation({
     mutationFn: async () => {
@@ -235,6 +243,8 @@ function FixedCostsPanel() {
       <p className="mb-3 text-sm text-zinc-500">
         {formatMonthLong(occurredOn)}. Total fijos:{' '}
         <span className="font-medium text-zinc-800">{formatMoney(total)}</span>
+        {' · '}
+        {workingDays} días laborales · día {formatMoney(dailyFixed)}
         {categoriesQuery.isLoading || query.isFetching ? ' Cargando…' : ''}
       </p>
       {rows.length === 0 ? (

@@ -18,6 +18,7 @@ import { useInstallPrompt } from '../../hooks/useInstallPrompt'
 import { useAuth } from '../../hooks/useAuth'
 import { useRealtimeInvalidation } from '../../hooks/useRealtimeInvalidation'
 import { supabase } from '../../lib/supabase'
+import { ROLE_LABELS } from '../../types/database'
 
 const modules = [
   {
@@ -34,8 +35,8 @@ const modules = [
   {
     title: 'Contabilidad',
     links: [
+      { to: '/resultado', label: 'Costos y gastos', icon: Wallet },
       { to: '/reportes', label: 'Este mes', icon: Scissors },
-      { to: '/resultado', label: 'Resultados', icon: Wallet },
     ],
   },
 ]
@@ -125,7 +126,9 @@ export function AppShell() {
               <p className="truncate text-xs font-medium text-zinc-800">
                 {profile?.full_name || user?.email}
               </p>
-              <p className="truncate text-[11px] capitalize text-zinc-500">{profile?.role ?? 'supervisor'}</p>
+              <p className="truncate text-[11px] text-zinc-500">
+                {profile ? ROLE_LABELS[profile.role] : 'Operario'}
+              </p>
             </div>
             <button
               type="button"

@@ -11,6 +11,7 @@ export function ResultCard({
   missingRate,
   hasFixed,
   href,
+  workingDays,
 }: {
   title: string
   result: number
@@ -21,6 +22,7 @@ export function ResultCard({
   missingRate: boolean
   hasFixed: boolean
   href?: string
+  workingDays?: number
 }) {
   const tone = result > 0 ? 'text-emerald-700' : result < 0 ? 'text-rose-600' : 'text-zinc-800'
   const label = result > 0 ? 'Ganando' : result < 0 ? 'Perdiendo' : 'En ceros'
@@ -48,6 +50,11 @@ export function ResultCard({
           {fixedLabel} {formatMoney(fixedCosts)}
         </span>
       </div>
+      {workingDays ? (
+        <p className="mt-2 text-xs text-zinc-400">
+          Fijos del día = fijos del mes ÷ {workingDays} días laborales
+        </p>
+      ) : null}
       {missingRate ? (
         <p className="mt-3 text-sm text-amber-700">Falta valor minuto en algún lote. El ingreso puede salir $0.</p>
       ) : null}
@@ -56,7 +63,7 @@ export function ResultCard({
           Aún no hay fijos para copiar.{' '}
           {href ? (
             <Link to={href} className="font-medium underline">
-              Cárgalos una vez en Resultados
+              Cárgalos una vez en Costos y gastos
             </Link>
           ) : (
             'Cárgalos una vez; los meses siguientes se copian solos.'

@@ -141,6 +141,7 @@ export function DashboardPage() {
             missingRate={todayResult.missingRate}
             hasFixed={todayResult.hasFixed}
             href="/resultado"
+            workingDays={monthResult.result.workingDays}
           />
         </div>
       ) : null}

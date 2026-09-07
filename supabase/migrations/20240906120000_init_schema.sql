@@ -25,7 +25,7 @@ $$;
 create table public.profiles (
   id uuid primary key references auth.users(id) on delete cascade,
   full_name text,
-  role text not null default 'supervisor' check (role in ('admin', 'supervisor', 'consulta')),
+  role text not null default 'supervisor' check (role in ('desarrollador', 'admin', 'supervisor', 'consulta')),
   created_at timestamptz not null default now()
 );
 
