@@ -153,6 +153,14 @@ export interface ProductionEntryCalculation {
 
 export type CostEntryType = 'fijo_mes' | 'variable_dia'
 
+export interface CostCategory {
+  id: string
+  entry_type: CostEntryType
+  name: string
+  sort_order: number
+  created_at: string
+}
+
 export interface CostEntry {
   id: string
   entry_type: CostEntryType

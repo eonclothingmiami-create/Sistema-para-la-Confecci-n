@@ -1,7 +1,7 @@
 import { eachDateISO, endOfMonthISO, startOfMonthISO } from './efficiency'
 import type { CostEntry, DailyProductionRevenue } from '../types/database'
 
-export const FIXED_CATEGORIES = [
+export const DEFAULT_FIXED_CATEGORIES = [
   'Arriendo',
   'Nómina taller',
   'Nómina administrativa',
@@ -11,7 +11,7 @@ export const FIXED_CATEGORIES = [
   'Otro fijo',
 ] as const
 
-export const VARIABLE_CATEGORIES = [
+export const DEFAULT_VARIABLE_CATEGORIES = [
   'Insumos',
   'Imprevisto',
   'Emergencia',

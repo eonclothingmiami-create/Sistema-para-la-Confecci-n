@@ -1,14 +1,21 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Plus, Trash2 } from 'lucide-react'
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Field, PrimaryButton, SecondaryButton, SelectInput, TextInput } from '../../components/ui/FormField'
 import { PageHeader } from '../../components/ui/PageHeader'
 import { SegmentedTabs } from '../../components/ui/SegmentedTabs'
-import { formatMoney } from '../../lib/money'
+import {
+  unusedCategoryName,
+  useCostCategories,
+  useCreateCostCategory,
+  useDeleteCostCategory,
+  useRenameCostCategory,
+} from '../../hooks/useCostCategories'
 import { formatMonthLong, shiftMonthISO, startOfMonthISO, todayISO } from '../../lib/efficiency'
-import { FIXED_CATEGORIES, VARIABLE_CATEGORIES, sumAmounts } from '../../lib/result'
+import { formatMoney } from '../../lib/money'
+import { sumAmounts } from '../../lib/result'
 import { supabase } from '../../lib/supabase'
-import type { CostEntry, ProductionOrder } from '../../types/database'
+import type { CostCategory, CostEntry, ProductionOrder } from '../../types/database'
 
 type CaptureTab = 'fijos' | 'variables'
 
@@ -19,7 +26,7 @@ export function ResultadoPage() {
     <div>
       <PageHeader
         title="Resultado"
-        description="Los fijos se cargan una vez al mes. Los gastos del día, el día que ocurren."
+        description="Las categorías las arma cada empresa. Los fijos se cargan una vez al mes; los gastos del día, el día que ocurren."
         actions={
           <SegmentedTabs
             value={tab}
@@ -41,6 +48,9 @@ function FixedCostsPanel() {
   const [month, setMonth] = useState(todayISO().slice(0, 7))
   const occurredOn = startOfMonthISO(`${month}-01`)
   const previousOn = startOfMonthISO(shiftMonthISO(occurredOn, -1))
+  const categoriesQuery = useCostCategories('fijo_mes')
+  const createCategory = useCreateCostCategory('fijo_mes')
+  const deleteCategory = useDeleteCostCategory()
 
   const query = useQuery({
     queryKey: ['cost_entries', 'fijo_mes', occurredOn],
@@ -68,26 +78,87 @@ function FixedCostsPanel() {
     },
   })
 
-  const [draft, setDraft] = useState<Record<string, { amount: string; notes: string }>>({})
+  const [draft, setDraft] = useState<Record<string, { name: string; amount: string; notes: string }>>({})
+
+  const catalog = categoriesQuery.data ?? []
+  const catalogNames = new Set(catalog.map((item) => item.name))
+  const orphanEntries = (query.data ?? []).filter((entry) => !catalogNames.has(entry.category))
 
   const rows = useMemo(() => {
-    return FIXED_CATEGORIES.map((category) => {
-      const saved = query.data?.find((item) => item.category === category)
-      const local = draft[category]
+    const fromCatalog = catalog.map((category) => {
+      const saved = query.data?.find((item) => item.category === category.name)
+      const local = draft[category.id]
       return {
-        category,
+        key: category.id,
+        categoryId: category.id,
+        savedName: category.name,
+        name: local?.name ?? category.name,
         id: saved?.id,
         amount: local?.amount ?? (saved ? String(Number(saved.amount)) : ''),
         notes: local?.notes ?? saved?.notes ?? '',
       }
     })
-  }, [draft, query.data])
+    const orphans = orphanEntries.map((entry) => {
+      const key = `orphan:${entry.id}`
+      const local = draft[key]
+      return {
+        key,
+        categoryId: null as string | null,
+        savedName: entry.category,
+        name: local?.name ?? entry.category,
+        id: entry.id,
+        amount: local?.amount ?? String(Number(entry.amount)),
+        notes: local?.notes ?? entry.notes ?? '',
+      }
+    })
+    return [...fromCatalog, ...orphans]
+  }, [catalog, draft, orphanEntries, query.data])
 
   const total = rows.reduce((sum, row) => sum + (Number(row.amount) || 0), 0)
 
   const save = useMutation({
     mutationFn: async () => {
+      const used = new Set<string>()
       for (const row of rows) {
+        const name = row.name.trim()
+        if (!name) throw new Error('Todas las categorías necesitan un nombre.')
+        const key = name.toLocaleLowerCase()
+        if (used.has(key)) throw new Error(`La categoría "${name}" está repetida.`)
+        used.add(key)
+      }
+
+      for (const row of rows) {
+        const name = row.name.trim()
+        if (row.categoryId && name !== row.savedName) {
+          const { error } = await supabase.from('cost_categories').update({ name }).eq('id', row.categoryId)
+          if (error) {
+            if (error.code === '23505') throw new Error(`La categoría "${name}" ya existe.`)
+            throw error
+          }
+          const { error: entriesError } = await supabase
+            .from('cost_entries')
+            .update({ category: name })
+            .eq('entry_type', 'fijo_mes')
+            .eq('category', row.savedName)
+          if (entriesError) throw entriesError
+        }
+
+        if (!row.categoryId && name !== row.savedName) {
+          const { error } = await supabase.from('cost_categories').insert({
+            entry_type: 'fijo_mes',
+            name,
+            sort_order: Date.now() % 100000,
+          })
+          if (error && error.code !== '23505') throw error
+          if (row.id) {
+            const { error: renameError } = await supabase
+              .from('cost_entries')
+              .update({ category: name })
+              .eq('id', row.id)
+            if (renameError) throw renameError
+          }
+        }
+
         const amount = Number(row.amount) || 0
         if (row.id) {
           if (amount <= 0 && !row.notes.trim()) {
@@ -97,7 +168,7 @@ function FixedCostsPanel() {
           }
           const { error } = await supabase
             .from('cost_entries')
-            .update({ amount, notes: row.notes.trim() || null })
+            .update({ category: name, amount, notes: row.notes.trim() || null })
             .eq('id', row.id)
           if (error) throw error
           continue
@@ -106,7 +177,7 @@ function FixedCostsPanel() {
         const { error } = await supabase.from('cost_entries').insert({
           entry_type: 'fijo_mes',
           occurred_on: occurredOn,
-          category: row.category,
+          category: name,
           amount,
           notes: row.notes.trim() || null,
         })
@@ -116,6 +187,7 @@ function FixedCostsPanel() {
     onSuccess: async () => {
       setDraft({})
       await queryClient.invalidateQueries({ queryKey: ['cost_entries'] })
+      await queryClient.invalidateQueries({ queryKey: ['cost_categories'] })
     },
   })
 
@@ -123,43 +195,57 @@ function FixedCostsPanel() {
     mutationFn: async () => {
       const previous = previousQuery.data ?? []
       if (previous.length === 0) throw new Error('El mes anterior no tiene fijos.')
+      const existingNames = new Set(catalog.map((item) => item.name.toLocaleLowerCase()))
       for (const item of previous) {
-        const { error } = await supabase.from('cost_entries').upsert(
-          {
+        if (!existingNames.has(item.category.toLocaleLowerCase())) {
+          const { error } = await supabase.from('cost_categories').insert({
             entry_type: 'fijo_mes',
-            occurred_on: occurredOn,
-            category: item.category,
-            amount: item.amount,
-            notes: item.notes,
-          },
-          { onConflict: 'occurred_on,category' },
-        )
-        if (error) {
-          const existing = query.data?.find((row) => row.category === item.category)
-          if (existing) {
-            const { error: updateError } = await supabase
-              .from('cost_entries')
-              .update({ amount: item.amount, notes: item.notes })
-              .eq('id', existing.id)
-            if (updateError) throw updateError
-            continue
-          }
-          const { error: insertError } = await supabase.from('cost_entries').insert({
-            entry_type: 'fijo_mes',
-            occurred_on: occurredOn,
-            category: item.category,
-            amount: item.amount,
-            notes: item.notes,
+            name: item.category,
+            sort_order: Date.now() % 100000,
           })
-          if (insertError) throw insertError
+          if (error && error.code !== '23505') throw error
+          existingNames.add(item.category.toLocaleLowerCase())
         }
+        const existing = query.data?.find((row) => row.category === item.category)
+        if (existing) {
+          const { error: updateError } = await supabase
+            .from('cost_entries')
+            .update({ amount: item.amount, notes: item.notes })
+            .eq('id', existing.id)
+          if (updateError) throw updateError
+          continue
+        }
+        const { error: insertError } = await supabase.from('cost_entries').insert({
+          entry_type: 'fijo_mes',
+          occurred_on: occurredOn,
+          category: item.category,
+          amount: item.amount,
+          notes: item.notes,
+        })
+        if (insertError) throw insertError
       }
     },
     onSuccess: async () => {
       setDraft({})
       await queryClient.invalidateQueries({ queryKey: ['cost_entries'] })
+      await queryClient.invalidateQueries({ queryKey: ['cost_categories'] })
     },
   })
+
+  function updateDraft(key: string, patch: Partial<{ name: string; amount: string; notes: string }>, current: {
+    name: string
+    amount: string
+    notes: string
+  }) {
+    setDraft((prev) => ({
+      ...prev,
+      [key]: {
+        name: patch.name ?? current.name,
+        amount: patch.amount ?? current.amount,
+        notes: patch.notes ?? current.notes,
+      },
+    }))
+  }
 
   return (
     <div>
@@ -178,6 +264,20 @@ function FixedCostsPanel() {
         <div className="flex flex-wrap gap-2">
           <SecondaryButton
             type="button"
+            onClick={() => {
+              const name = unusedCategoryName(
+                catalog.map((item) => item.name),
+                'Nuevo fijo',
+              )
+              createCategory.mutate(name)
+            }}
+            disabled={createCategory.isPending}
+          >
+            <Plus className="h-4 w-4" />
+            Agregar categoría
+          </SecondaryButton>
+          <SecondaryButton
+            type="button"
             onClick={() => copyPrevious.mutate()}
             disabled={copyPrevious.isPending || (previousQuery.data?.length ?? 0) === 0}
           >
@@ -191,6 +291,7 @@ function FixedCostsPanel() {
 
       <p className="mb-3 text-sm text-zinc-500">
         {formatMonthLong(occurredOn)}. Total fijos: <span className="font-medium text-zinc-800">{formatMoney(total)}</span>
+        {categoriesQuery.isLoading ? ' Cargando categorías…' : ''}
       </p>
 
       <div className="overflow-x-auto rounded-2xl border border-zinc-200 bg-white">
@@ -200,46 +301,84 @@ function FixedCostsPanel() {
               <th className="px-4 py-3 font-medium">Categoría</th>
               <th className="px-4 py-3 font-medium">Valor del mes</th>
               <th className="px-4 py-3 font-medium">Nota</th>
+              <th className="px-4 py-3 font-medium" />
             </tr>
           </thead>
           <tbody>
-            {rows.map((row) => (
-              <tr key={row.category} className="border-t border-zinc-100">
-                <td className="px-4 py-2.5 font-medium text-zinc-800">{row.category}</td>
-                <td className="px-4 py-2.5">
-                  <TextInput
-                    type="number"
-                    min={0}
-                    step="1000"
-                    value={row.amount}
-                    onChange={(event) =>
-                      setDraft((current) => ({
-                        ...current,
-                        [row.category]: { amount: event.target.value, notes: row.notes },
-                      }))
-                    }
-                  />
-                </td>
-                <td className="px-4 py-2.5">
-                  <TextInput
-                    value={row.notes}
-                    onChange={(event) =>
-                      setDraft((current) => ({
-                        ...current,
-                        [row.category]: { amount: row.amount, notes: event.target.value },
-                      }))
-                    }
-                  />
+            {rows.length === 0 ? (
+              <tr>
+                <td colSpan={4} className="px-4 py-10 text-center text-sm text-zinc-400">
+                  Agrega las categorías fijas de esta empresa.
                 </td>
               </tr>
-            ))}
+            ) : (
+              rows.map((row) => (
+                <tr key={row.key} className="border-t border-zinc-100">
+                  <td className="px-4 py-2.5">
+                    <TextInput
+                      value={row.name}
+                      onChange={(event) => updateDraft(row.key, { name: event.target.value }, row)}
+                    />
+                  </td>
+                  <td className="px-4 py-2.5">
+                    <TextInput
+                      type="number"
+                      min={0}
+                      step="1000"
+                      value={row.amount}
+                      onChange={(event) => updateDraft(row.key, { amount: event.target.value }, row)}
+                    />
+                  </td>
+                  <td className="px-4 py-2.5">
+                    <TextInput
+                      value={row.notes}
+                      onChange={(event) => updateDraft(row.key, { notes: event.target.value }, row)}
+                    />
+                  </td>
+                  <td className="px-4 py-2.5 text-right">
+                    {row.categoryId ? (
+                      <button
+                        type="button"
+                        className="text-rose-500 hover:text-rose-700"
+                        title="Quitar categoría"
+                        onClick={() => {
+                          if (
+                            confirm(
+                              `¿Quitar "${row.savedName}" de la lista? Se borra el valor de este mes. Los meses anteriores quedan en el historial.`,
+                            )
+                          ) {
+                            deleteCategory.mutate({
+                              id: row.categoryId!,
+                              entryType: 'fijo_mes',
+                              name: row.savedName,
+                              monthStart: occurredOn,
+                            })
+                          }
+                        }}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </button>
+                    ) : null}
+                  </td>
+                </tr>
+              ))
+            )}
           </tbody>
         </table>
       </div>
-      {save.error ? <p className="mt-3 text-sm text-rose-600">No se pudieron guardar los fijos.</p> : null}
+      {save.error ? (
+        <p className="mt-3 text-sm text-rose-600">
+          {(save.error as Error).message || 'No se pudieron guardar los fijos.'}
+        </p>
+      ) : null}
       {copyPrevious.error ? (
         <p className="mt-3 text-sm text-rose-600">
           {(copyPrevious.error as Error).message || 'No se pudo copiar el mes anterior.'}
+        </p>
+      ) : null}
+      {createCategory.error ? (
+        <p className="mt-3 text-sm text-rose-600">
+          {(createCategory.error as Error).message || 'No se pudo agregar la categoría.'}
         </p>
       ) : null}
     </div>
@@ -249,10 +388,26 @@ function FixedCostsPanel() {
 function VariableCostsPanel() {
   const queryClient = useQueryClient()
   const [date, setDate] = useState(todayISO())
-  const [category, setCategory] = useState<string>(VARIABLE_CATEGORIES[0])
+  const [category, setCategory] = useState('')
   const [amount, setAmount] = useState('')
   const [notes, setNotes] = useState('')
   const [orderId, setOrderId] = useState('')
+  const [newCategory, setNewCategory] = useState('')
+  const [editingId, setEditingId] = useState<string | null>(null)
+  const [editingName, setEditingName] = useState('')
+
+  const categoriesQuery = useCostCategories('variable_dia')
+  const createCategory = useCreateCostCategory('variable_dia')
+  const renameCategory = useRenameCostCategory()
+  const deleteCategory = useDeleteCostCategory()
+  const categories = categoriesQuery.data ?? []
+
+  useEffect(() => {
+    if (!category && categories[0]) setCategory(categories[0].name)
+    if (category && categories.length > 0 && !categories.some((item) => item.name === category)) {
+      setCategory(categories[0].name)
+    }
+  }, [categories, category])
 
   const query = useQuery({
     queryKey: ['cost_entries', 'variable_dia', date],
@@ -280,6 +435,7 @@ function VariableCostsPanel() {
   const save = useMutation({
     mutationFn: async () => {
       const value = Number(amount)
+      if (!category) throw new Error('Elige o crea una categoría.')
       if (!Number.isFinite(value) || value <= 0) throw new Error('Escribe un valor mayor a 0.')
       const { error } = await supabase.from('cost_entries').insert({
         entry_type: 'variable_dia',
@@ -325,9 +481,10 @@ function VariableCostsPanel() {
         </Field>
         <Field label="Categoría">
           <SelectInput value={category} onChange={(event) => setCategory(event.target.value)}>
-            {VARIABLE_CATEGORIES.map((item) => (
-              <option key={item} value={item}>
-                {item}
+            {categories.length === 0 ? <option value="">Crea una categoría</option> : null}
+            {categories.map((item) => (
+              <option key={item.id} value={item.name}>
+                {item.name}
               </option>
             ))}
           </SelectInput>
@@ -369,6 +526,59 @@ function VariableCostsPanel() {
         ) : null}
       </form>
 
+      <CategoryManager
+        categories={categories}
+        newName={newCategory}
+        onNewNameChange={setNewCategory}
+        editingId={editingId}
+        editingName={editingName}
+        onEditingIdChange={setEditingId}
+        onEditingNameChange={setEditingName}
+        onAdd={() => {
+          createCategory.mutate(newCategory, {
+            onSuccess: (created) => {
+              setNewCategory('')
+              setCategory(created.name)
+            },
+          })
+        }}
+        onRename={(item) => {
+          renameCategory.mutate(
+            {
+              id: item.id,
+              entryType: 'variable_dia',
+              previousName: item.name,
+              nextName: editingName,
+            },
+            {
+              onSuccess: () => {
+                if (category === item.name) setCategory(editingName.trim())
+                setEditingId(null)
+              },
+            },
+          )
+        }}
+        onDelete={(item) => {
+          if (
+            confirm(
+              `¿Quitar "${item.name}" de la lista? Los gastos ya cargados quedan en el historial.`,
+            )
+          ) {
+            deleteCategory.mutate({
+              id: item.id,
+              entryType: 'variable_dia',
+              name: item.name,
+            })
+          }
+        }}
+        addPending={createCategory.isPending}
+        error={
+          (createCategory.error as Error | null)?.message ||
+          (renameCategory.error as Error | null)?.message ||
+          (deleteCategory.error as Error | null)?.message
+        }
+      />
+
       <p className="mb-3 text-sm text-zinc-500">
         Gastos de este día: <span className="font-medium text-zinc-800">{formatMoney(total)}</span>
       </p>
@@ -404,6 +614,94 @@ function VariableCostsPanel() {
           </ul>
         )}
       </div>
+    </div>
+  )
+}
+
+function CategoryManager({
+  categories,
+  newName,
+  onNewNameChange,
+  editingId,
+  editingName,
+  onEditingIdChange,
+  onEditingNameChange,
+  onAdd,
+  onRename,
+  onDelete,
+  addPending,
+  error,
+}: {
+  categories: CostCategory[]
+  newName: string
+  onNewNameChange: (value: string) => void
+  editingId: string | null
+  editingName: string
+  onEditingIdChange: (id: string | null) => void
+  onEditingNameChange: (value: string) => void
+  onAdd: () => void
+  onRename: (item: CostCategory) => void
+  onDelete: (item: CostCategory) => void
+  addPending: boolean
+  error?: string
+}) {
+  return (
+    <div className="mb-5 rounded-2xl border border-zinc-200 bg-white p-4">
+      <p className="mb-3 text-sm font-medium text-zinc-800">Categorías de esta empresa</p>
+      <div className="mb-3 flex flex-wrap gap-2">
+        <TextInput
+          placeholder="Nueva categoría"
+          value={newName}
+          onChange={(event) => onNewNameChange(event.target.value)}
+          className="max-w-xs"
+        />
+        <SecondaryButton type="button" onClick={onAdd} disabled={addPending || !newName.trim()}>
+          <Plus className="h-4 w-4" />
+          Agregar
+        </SecondaryButton>
+      </div>
+      <ul className="divide-y divide-zinc-100">
+        {categories.map((item) => (
+          <li key={item.id} className="flex items-center justify-between gap-3 py-2">
+            {editingId === item.id ? (
+              <TextInput value={editingName} onChange={(event) => onEditingNameChange(event.target.value)} />
+            ) : (
+              <span className="text-sm text-zinc-800">{item.name}</span>
+            )}
+            <div className="flex shrink-0 gap-2">
+              {editingId === item.id ? (
+                <>
+                  <SecondaryButton type="button" onClick={() => onRename(item)}>
+                    Guardar
+                  </SecondaryButton>
+                  <SecondaryButton type="button" onClick={() => onEditingIdChange(null)}>
+                    Cancelar
+                  </SecondaryButton>
+                </>
+              ) : (
+                <SecondaryButton
+                  type="button"
+                  onClick={() => {
+                    onEditingIdChange(item.id)
+                    onEditingNameChange(item.name)
+                  }}
+                >
+                  Renombrar
+                </SecondaryButton>
+              )}
+              <button
+                type="button"
+                className="text-rose-500 hover:text-rose-700"
+                title="Quitar categoría"
+                onClick={() => onDelete(item)}
+              >
+                <Trash2 className="h-4 w-4" />
+              </button>
+            </div>
+          </li>
+        ))}
+      </ul>
+      {error ? <p className="mt-3 text-sm text-rose-600">{error}</p> : null}
     </div>
   )
 }
