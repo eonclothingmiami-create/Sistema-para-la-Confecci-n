@@ -25,16 +25,18 @@ const modules = [
     links: [
       { to: '/', label: 'Dashboard', icon: LayoutDashboard, end: true },
       { to: '/produccion', label: 'Producción', icon: ClipboardList },
-      { to: '/operarios', label: 'Operarios', icon: Users },
-      { to: '/clientes', label: 'Clientes', icon: Building2 },
-      { to: '/referencias', label: 'Referencias', icon: Shirt },
       { to: '/ordenes', label: 'Órdenes', icon: Factory },
-      { to: '/reportes', label: 'Este mes', icon: Scissors },
+      { to: '/referencias', label: 'Referencias', icon: Shirt },
+      { to: '/clientes', label: 'Clientes', icon: Building2 },
+      { to: '/operarios', label: 'Operarios', icon: Users },
     ],
   },
   {
     title: 'Contabilidad',
-    links: [{ to: '/resultado', label: 'Resultados', icon: Wallet }],
+    links: [
+      { to: '/reportes', label: 'Este mes', icon: Scissors },
+      { to: '/resultado', label: 'Resultados', icon: Wallet },
+    ],
   },
 ]
 
