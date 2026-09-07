@@ -97,7 +97,7 @@ export function DashboardPage() {
         <p className="text-xs font-medium tracking-wide text-zinc-400 uppercase">Eficiencia del taller</p>
         <div className="mt-2 flex flex-wrap items-end justify-between gap-4">
           <div>
-            <p className="text-5xl font-semibold tracking-tight tabular text-zinc-900">
+            <p className="text-4xl font-semibold tracking-tight tabular text-zinc-900 sm:text-5xl">
               {summaries.length === 0 ? '—' : formatPercent(general)}
             </p>
             <div className="mt-3 flex flex-wrap items-center gap-2">

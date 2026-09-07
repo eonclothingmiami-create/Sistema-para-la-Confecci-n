@@ -3,6 +3,7 @@ import { Plus, Trash2 } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import { Field, PrimaryButton, SecondaryButton, SelectInput, TextArea, TextInput } from '../../components/ui/FormField'
 import { PageHeader } from '../../components/ui/PageHeader'
+import { DesktopOnly, RecordCard, RecordCardList, RecordField } from '../../components/ui/RecordCard'
 import { StatusBadge } from '../../components/ui/StatusBadge'
 import {
   DEFAULT_CAPACITY,
@@ -361,6 +362,71 @@ export function ProductionPage() {
       ) : null}
 
       {drafts.length > 0 ? (
+        <>
+        <RecordCardList>
+          {drafts.map((draft) => {
+            const operation = operationsQuery.data?.find((item) => item.id === draft.reference_operation_id)
+            const standard = Number(operation?.standard_minutes ?? 0)
+            const delivered = draft.delivered_units
+            const minutes = deliveredMinutes(standard, delivered)
+            const unitsHour = expectedUnitsPerHour(standard)
+            return (
+              <RecordCard
+                key={draft.reference_operation_id}
+                title={`${operation?.operation_number ?? '—'} · ${operation?.operation_name ?? '—'}`}
+                subtitle={`${standard.toFixed(2)} min/und`}
+                actions={
+                  <button
+                    type="button"
+                    className="text-rose-500 hover:text-rose-700"
+                    onClick={() => removeOperationRow(draft.reference_operation_id)}
+                    title="Quitar del cuadro"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </button>
+                }
+              >
+                <RecordField label="Cantidad lote">{selectedOrder?.total_quantity ?? '—'}</RecordField>
+                <RecordField label="Und. entregadas">
+                  <TextInput
+                    type="number"
+                    min={0}
+                    value={delivered}
+                    onChange={(e) =>
+                      updateDraft(draft.reference_operation_id, {
+                        delivered_units: Number(e.target.value) || 0,
+                      })
+                    }
+                  />
+                </RecordField>
+                <RecordField label="Und. defectuosas">
+                  <TextInput
+                    type="number"
+                    min={0}
+                    value={draft.defective_units}
+                    onChange={(e) =>
+                      updateDraft(draft.reference_operation_id, {
+                        defective_units: Number(e.target.value) || 0,
+                      })
+                    }
+                  />
+                </RecordField>
+                <RecordField label="Total min. entregados">{formatMinutes(minutes)}</RecordField>
+                <RecordField label="Und/hora 100%">
+                  {unitsHour > 0 ? unitsHour.toFixed(0) : '—'}
+                  {delivered > 0 ? ` · ${formatPercent(hourlyPerformancePercent(delivered, standard))} vs 1h` : ''}
+                </RecordField>
+                <RecordField label="Novedades">
+                  <TextInput
+                    value={draft.notes}
+                    onChange={(e) => updateDraft(draft.reference_operation_id, { notes: e.target.value })}
+                  />
+                </RecordField>
+              </RecordCard>
+            )
+          })}
+        </RecordCardList>
+        <DesktopOnly>
         <div className="overflow-x-auto rounded-xl border border-zinc-200 bg-white">
           <table className="min-w-full text-sm">
             <thead className="bg-zinc-50 text-left text-xs uppercase tracking-wide text-zinc-500">
@@ -445,6 +511,8 @@ export function ProductionPage() {
             </tbody>
           </table>
         </div>
+        </DesktopOnly>
+        </>
       ) : orderId ? (
         <p className="mb-4 rounded-xl border border-dashed border-zinc-300 bg-white px-4 py-8 text-center text-sm text-zinc-500">
           Agrega las operaciones que sí trabajó hoy, por su número (como en el cuadro: 17, 5…).

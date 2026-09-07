@@ -13,6 +13,8 @@ import {
 } from 'lucide-react'
 import { useState } from 'react'
 import { NavLink, Outlet } from 'react-router-dom'
+import { InstallBanner } from '../ui/InstallBanner'
+import { useInstallPrompt } from '../../hooks/useInstallPrompt'
 import { useAuth } from '../../hooks/useAuth'
 import { useRealtimeInvalidation } from '../../hooks/useRealtimeInvalidation'
 import { supabase } from '../../lib/supabase'
@@ -31,6 +33,7 @@ const links = [
 export function AppShell() {
   const { user, profile } = useAuth()
   const [open, setOpen] = useState(false)
+  const install = useInstallPrompt()
   useRealtimeInvalidation()
 
   async function signOut() {
@@ -38,7 +41,7 @@ export function AppShell() {
   }
 
   return (
-    <div className="min-h-screen bg-zinc-100 lg:flex">
+    <div className="min-h-screen overflow-x-hidden bg-zinc-100 lg:flex">
       <aside
         className={`fixed inset-y-0 left-0 z-40 w-64 border-r border-zinc-200 bg-white transition-transform lg:static lg:translate-x-0 ${
           open ? 'translate-x-0' : '-translate-x-full'
@@ -86,7 +89,7 @@ export function AppShell() {
         />
       ) : null}
 
-      <div className="flex min-w-0 flex-1 flex-col">
+      <div className="flex min-w-0 flex-1 flex-col overflow-x-hidden">
         <header className="sticky top-0 z-20 flex h-14 items-center justify-between gap-3 border-b border-zinc-200 bg-white/90 px-4 backdrop-blur">
           <button
             className="rounded-md p-1 text-zinc-600 lg:hidden"
@@ -115,9 +118,10 @@ export function AppShell() {
             </button>
           </div>
         </header>
-        <main className="min-w-0 p-4 sm:p-6">
+        <main className={`min-w-0 p-4 sm:p-6 ${install.visible ? 'pb-36' : ''}`}>
           <Outlet />
         </main>
+        <InstallBanner prompt={install} />
       </div>
     </div>
   )

@@ -16,6 +16,7 @@ import {
 } from '../../components/ui/FormField'
 import { Modal } from '../../components/ui/Modal'
 import { PageHeader } from '../../components/ui/PageHeader'
+import { DesktopOnly, RecordCard, RecordCardList, RecordField } from '../../components/ui/RecordCard'
 import { formatMinuteRate } from '../../lib/money'
 import { supabase } from '../../lib/supabase'
 import type { Client, GarmentReference } from '../../types/database'
@@ -155,6 +156,41 @@ export function ReferencesPage() {
       ) : null}
 
       {(query.data?.length ?? 0) > 0 ? (
+        <>
+        <RecordCardList>
+          {query.data?.map((item) => (
+            <RecordCard
+              key={item.id}
+              title={`${item.code} · ${item.name}`}
+              subtitle={item.active ? 'Activa' : 'Inactiva'}
+              actions={
+                <>
+                  <Link to={`/referencias/${item.id}/ruta`} className="text-zinc-600 hover:text-zinc-900" title="Ruta operacional">
+                    <Route className="h-4 w-4" />
+                  </Link>
+                  <button className="text-zinc-500 hover:text-zinc-900" onClick={() => startEdit(item)}>
+                    <Pencil className="h-4 w-4" />
+                  </button>
+                  <button
+                    className="text-rose-500 hover:text-rose-700"
+                    onClick={() => {
+                      if (confirm('¿Eliminar esta referencia y su ruta?')) void remove.mutate(item.id)
+                    }}
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </button>
+                </>
+              }
+            >
+              <RecordField label="Tipo">{item.garment_type || '—'}</RecordField>
+              <RecordField label="Cliente">{item.clients?.name || '—'}</RecordField>
+              <RecordField label="Valor min.">
+                {item.clients ? formatMinuteRate(item.clients.minute_rate) : '—'}
+              </RecordField>
+            </RecordCard>
+          ))}
+        </RecordCardList>
+        <DesktopOnly>
         <div className="overflow-x-auto rounded-xl border border-zinc-200 bg-white">
           <table className="min-w-full text-sm">
             <thead className="bg-zinc-50 text-left text-xs uppercase tracking-wide text-zinc-500">
@@ -204,6 +240,8 @@ export function ReferencesPage() {
             </tbody>
           </table>
         </div>
+        </DesktopOnly>
+        </>
       ) : null}
 
       {open ? (

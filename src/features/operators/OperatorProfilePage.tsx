@@ -6,6 +6,7 @@ import { EfficiencyArea } from '../../components/charts/EfficiencyArea'
 import { EmptyState } from '../../components/ui/EmptyState'
 import { Field, SelectInput, TextInput } from '../../components/ui/FormField'
 import { PageHeader } from '../../components/ui/PageHeader'
+import { DesktopOnly, RecordCard, RecordCardList, RecordField } from '../../components/ui/RecordCard'
 import { SegmentedTabs } from '../../components/ui/SegmentedTabs'
 import { StatusBadge } from '../../components/ui/StatusBadge'
 import {
@@ -523,7 +524,28 @@ function HistoryPanel({
         <QuietStat label="Días" value={String(period.days)} />
       </div>
 
-      <div className="mb-5 overflow-x-auto rounded-2xl border border-zinc-200 bg-white">
+      <div className="mb-5">
+        <p className="mb-3 text-sm font-medium text-zinc-700 sm:hidden">Día a día</p>
+        {days.length === 0 ? (
+          <p className="rounded-2xl border border-zinc-200 bg-white px-4 py-8 text-center text-sm text-zinc-400 sm:hidden">
+            {loading ? 'Cargando…' : 'Sin historial en el rango.'}
+          </p>
+        ) : (
+          <RecordCardList>
+            {[...days].reverse().map((item) => (
+              <RecordCard key={item.production_date} title={item.production_date}>
+                <RecordField label="Prendas">{item.reference_labels.join(' · ') || '—'}</RecordField>
+                <RecordField label="Und">{item.total_delivered_units}</RecordField>
+                <RecordField label="Def.">{item.total_defective_units}</RecordField>
+                <RecordField label="Eficiencia">
+                  <StatusBadge value={item.efficiency_percentage} />
+                </RecordField>
+              </RecordCard>
+            ))}
+          </RecordCardList>
+        )}
+        <DesktopOnly>
+      <div className="overflow-x-auto rounded-2xl border border-zinc-200 bg-white">
         <div className="px-4 py-3 text-sm font-medium text-zinc-700">Día a día</div>
         <table className="min-w-full text-sm">
           <thead className="text-left text-xs text-zinc-400">
@@ -558,7 +580,28 @@ function HistoryPanel({
           </tbody>
         </table>
       </div>
+        </DesktopOnly>
+      </div>
 
+      <div>
+        <p className="mb-3 text-sm font-medium text-zinc-700 sm:hidden">Acumulado por operación</p>
+        {mix.length === 0 ? (
+          <p className="rounded-2xl border border-zinc-200 bg-white px-4 py-8 text-center text-sm text-zinc-400 sm:hidden">
+            Sin operaciones en el rango.
+          </p>
+        ) : (
+          <RecordCardList>
+            {mix.map((item) => (
+              <RecordCard key={item.id} title={`${item.number} · ${item.name}`}>
+                <RecordField label="Máquina">{item.machine}</RecordField>
+                <RecordField label="Und/hora">{expectedUnitsPerHour(item.standard).toFixed(0)}</RecordField>
+                <RecordField label="Unidades">{item.units}</RecordField>
+                <RecordField label="Minutos">{formatMinutes(item.minutes)}</RecordField>
+              </RecordCard>
+            ))}
+          </RecordCardList>
+        )}
+        <DesktopOnly>
       <div className="overflow-x-auto rounded-2xl border border-zinc-200 bg-white">
         <div className="px-4 py-3 text-sm font-medium text-zinc-700">Acumulado por operación</div>
         <table className="min-w-full text-sm">
@@ -593,6 +636,8 @@ function HistoryPanel({
             )}
           </tbody>
         </table>
+      </div>
+        </DesktopOnly>
       </div>
     </div>
   )

@@ -8,6 +8,7 @@ import { Field, PrimaryButton, SelectInput } from '../../components/ui/FormField
 import { useMonthResult } from '../../hooks/useMonthResult'
 import { formatMoney, formatSignedMoney } from '../../lib/money'
 import { PageHeader } from '../../components/ui/PageHeader'
+import { DesktopOnly, RecordCard, RecordCardList, RecordField } from '../../components/ui/RecordCard'
 import { StatusBadge } from '../../components/ui/StatusBadge'
 import {
   aggregateOperatorsByPeriod,
@@ -293,7 +294,31 @@ export function ReportsPage() {
       </button>
 
       {showDetail ? (
-        <div className="mt-4 overflow-x-auto rounded-2xl border border-zinc-200 bg-white">
+        <div className="mt-4">
+        {(detailQuery.data?.length ?? 0) === 0 ? (
+          <p className="rounded-2xl border border-zinc-200 bg-white px-4 py-8 text-center text-sm text-zinc-400 sm:hidden">
+            Sin detalle de operaciones.
+          </p>
+        ) : (
+          <RecordCardList>
+            {(detailQuery.data ?? []).map((row) => (
+              <RecordCard
+                key={row.entry_id}
+                title={
+                  operationsQuery.data?.find((item) => item.id === row.reference_operation_id)?.operation_name ??
+                  row.reference_operation_id.slice(0, 8)
+                }
+                subtitle={row.production_date}
+              >
+                <RecordField label="Unidades">{row.delivered_units}</RecordField>
+                <RecordField label="Defectuosas">{row.defective_units}</RecordField>
+                <RecordField label="Minutos">{formatMinutes(Number(row.delivered_minutes))}</RecordField>
+              </RecordCard>
+            ))}
+          </RecordCardList>
+        )}
+        <DesktopOnly>
+        <div className="overflow-x-auto rounded-2xl border border-zinc-200 bg-white">
           <table className="min-w-full text-sm">
             <thead className="text-left text-xs tracking-wide text-zinc-400">
               <tr>
@@ -326,6 +351,8 @@ export function ReportsPage() {
               ) : null}
             </tbody>
           </table>
+        </div>
+        </DesktopOnly>
         </div>
       ) : null}
     </div>

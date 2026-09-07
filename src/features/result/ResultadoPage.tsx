@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Plus, Trash2 } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import { Field, PrimaryButton, SecondaryButton, SelectInput, TextInput } from '../../components/ui/FormField'
+import { DesktopOnly, RecordCard, RecordCardList, RecordField } from '../../components/ui/RecordCard'
 import { PageHeader } from '../../components/ui/PageHeader'
 import { SegmentedTabs } from '../../components/ui/SegmentedTabs'
 import {
@@ -236,6 +237,67 @@ function FixedCostsPanel() {
         Cada mes nuevo arranca con los fijos del mes anterior. Edita y guarda solo si algo cambió.
       </p>
 
+      {rows.length === 0 ? (
+        <p className="rounded-2xl border border-zinc-200 bg-white px-4 py-10 text-center text-sm text-zinc-400 sm:hidden">
+          Agrega las categorías fijas de esta empresa.
+        </p>
+      ) : (
+        <RecordCardList>
+          {rows.map((row) => (
+            <RecordCard
+              key={row.key}
+              title={
+                <TextInput
+                  value={row.name}
+                  onChange={(event) => updateDraft(row.key, { name: event.target.value }, row)}
+                />
+              }
+              actions={
+                row.categoryId ? (
+                  <button
+                    type="button"
+                    className="text-rose-500 hover:text-rose-700"
+                    title="Quitar categoría"
+                    onClick={() => {
+                      if (
+                        confirm(
+                          `¿Quitar "${row.savedName}" de la lista? Se borra el valor de este mes. Los meses anteriores quedan en el historial.`,
+                        )
+                      ) {
+                        deleteCategory.mutate({
+                          id: row.categoryId!,
+                          entryType: 'fijo_mes',
+                          name: row.savedName,
+                          monthStart: occurredOn,
+                        })
+                      }
+                    }}
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </button>
+                ) : null
+              }
+            >
+              <RecordField label="Valor del mes">
+                <TextInput
+                  type="number"
+                  min={0}
+                  step="1000"
+                  value={row.amount}
+                  onChange={(event) => updateDraft(row.key, { amount: event.target.value }, row)}
+                />
+              </RecordField>
+              <RecordField label="Nota">
+                <TextInput
+                  value={row.notes}
+                  onChange={(event) => updateDraft(row.key, { notes: event.target.value }, row)}
+                />
+              </RecordField>
+            </RecordCard>
+          ))}
+        </RecordCardList>
+      )}
+      <DesktopOnly>
       <div className="overflow-x-auto rounded-2xl border border-zinc-200 bg-white">
         <table className="min-w-full text-sm">
           <thead className="text-left text-xs tracking-wide text-zinc-400">
@@ -308,6 +370,7 @@ function FixedCostsPanel() {
           </tbody>
         </table>
       </div>
+      </DesktopOnly>
       {save.error ? (
         <p className="mt-3 text-sm text-rose-600">
           {(save.error as Error).message || 'No se pudieron guardar los fijos.'}
@@ -604,13 +667,13 @@ function CategoryManager({
       </div>
       <ul className="divide-y divide-zinc-100">
         {categories.map((item) => (
-          <li key={item.id} className="flex items-center justify-between gap-3 py-2">
+          <li key={item.id} className="flex flex-col gap-2 py-2 sm:flex-row sm:items-center sm:justify-between">
             {editingId === item.id ? (
               <TextInput value={editingName} onChange={(event) => onEditingNameChange(event.target.value)} />
             ) : (
-              <span className="text-sm text-zinc-800">{item.name}</span>
+              <span className="min-w-0 text-sm text-zinc-800">{item.name}</span>
             )}
-            <div className="flex shrink-0 gap-2">
+            <div className="flex flex-wrap gap-2">
               {editingId === item.id ? (
                 <>
                   <SecondaryButton type="button" onClick={() => onRename(item)}>

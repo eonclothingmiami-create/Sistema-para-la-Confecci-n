@@ -9,6 +9,7 @@ import { EmptyState } from '../../components/ui/EmptyState'
 import { Field, PrimaryButton, SecondaryButton, TextInput } from '../../components/ui/FormField'
 import { Modal } from '../../components/ui/Modal'
 import { PageHeader } from '../../components/ui/PageHeader'
+import { DesktopOnly, RecordCard, RecordCardList, RecordField } from '../../components/ui/RecordCard'
 import { supabase } from '../../lib/supabase'
 import type { GarmentReference, ReferenceOperation } from '../../types/database'
 
@@ -155,6 +156,35 @@ export function ReferenceRoutePage() {
       ) : null}
 
       {(operationsQuery.data?.length ?? 0) > 0 ? (
+        <>
+        <RecordCardList>
+          {operationsQuery.data?.map((item) => (
+            <RecordCard
+              key={item.id}
+              title={`${item.operation_number} · ${item.operation_name}`}
+              subtitle={item.active ? 'Activa' : 'Inactiva'}
+              actions={
+                <>
+                  <button className="text-zinc-500 hover:text-zinc-900" onClick={() => startEdit(item)}>
+                    <Pencil className="h-4 w-4" />
+                  </button>
+                  <button
+                    className="text-rose-500 hover:text-rose-700"
+                    onClick={() => {
+                      if (confirm('¿Eliminar esta operación?')) void remove.mutate(item.id)
+                    }}
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </button>
+                </>
+              }
+            >
+              <RecordField label="Máquina">{item.machine_type || '—'}</RecordField>
+              <RecordField label="Min / und">{Number(item.standard_minutes).toFixed(4)}</RecordField>
+            </RecordCard>
+          ))}
+        </RecordCardList>
+        <DesktopOnly>
         <div className="overflow-x-auto rounded-xl border border-zinc-200 bg-white">
           <table className="min-w-full text-sm">
             <thead className="bg-zinc-50 text-left text-xs uppercase tracking-wide text-zinc-500">
@@ -193,6 +223,8 @@ export function ReferenceRoutePage() {
             </tbody>
           </table>
         </div>
+        </DesktopOnly>
+        </>
       ) : null}
 
       {open ? (

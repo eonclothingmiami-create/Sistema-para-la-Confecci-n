@@ -14,7 +14,8 @@ export function StatusBadge({ value }: { value: number }) {
       className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-semibold ring-1 ${styles[status]}`}
     >
       <span className="h-1.5 w-1.5 rounded-full bg-current" />
-      {formatPercent(value)} · {statusLabel(status)}
+      {formatPercent(value)}
+      <span className="hidden sm:inline"> · {statusLabel(status)}</span>
     </span>
   )
 }

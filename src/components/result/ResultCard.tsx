@@ -39,9 +39,15 @@ export function ResultCard({
         {formatSignedMoney(result)}
       </p>
       <p className={`mt-2 text-sm font-medium ${tone}`}>{label}</p>
-      <p className="mt-3 text-sm text-zinc-500">
-        Ingreso {formatMoney(revenue)} · Gastos {formatMoney(variableCosts)} · {fixedLabel} {formatMoney(fixedCosts)}
-      </p>
+      <div className="mt-3 flex flex-col gap-1 text-sm text-zinc-500 sm:block">
+        <span>Ingreso {formatMoney(revenue)}</span>
+        <span className="hidden sm:inline"> · </span>
+        <span>Gastos {formatMoney(variableCosts)}</span>
+        <span className="hidden sm:inline"> · </span>
+        <span>
+          {fixedLabel} {formatMoney(fixedCosts)}
+        </span>
+      </div>
       {missingRate ? (
         <p className="mt-3 text-sm text-amber-700">Falta valor minuto en algún lote. El ingreso puede salir $0.</p>
       ) : null}

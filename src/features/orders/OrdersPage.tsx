@@ -15,6 +15,7 @@ import {
 } from '../../components/ui/FormField'
 import { Modal } from '../../components/ui/Modal'
 import { PageHeader } from '../../components/ui/PageHeader'
+import { DesktopOnly, RecordCard, RecordCardList, RecordField } from '../../components/ui/RecordCard'
 import { formatMinuteRate } from '../../lib/money'
 import { supabase } from '../../lib/supabase'
 import type { GarmentReference, OrderStatus, ProductionOrder, ReferenceOperation } from '../../types/database'
@@ -210,6 +211,42 @@ export function OrdersPage() {
       ) : null}
 
       {(query.data?.length ?? 0) > 0 ? (
+        <>
+        <RecordCardList>
+          {query.data?.map((item) => (
+            <RecordCard
+              key={item.id}
+              title={item.order_number}
+              subtitle={statusLabel[item.status]}
+              actions={
+                <>
+                  <button className="text-zinc-500 hover:text-zinc-900" onClick={() => startEdit(item)}>
+                    <Pencil className="h-4 w-4" />
+                  </button>
+                  <button
+                    className="text-rose-500 hover:text-rose-700"
+                    onClick={() => {
+                      if (confirm('¿Eliminar esta orden?')) void remove.mutate(item.id)
+                    }}
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </button>
+                </>
+              }
+            >
+              <RecordField label="Referencia">
+                {item.garment_references
+                  ? `${item.garment_references.code} · ${item.garment_references.name}`
+                  : '—'}
+              </RecordField>
+              <RecordField label="Cantidad">{item.total_quantity}</RecordField>
+              <RecordField label="Valor min.">{formatMinuteRate(item.minute_rate)}</RecordField>
+              <RecordField label="Inicio">{item.start_date || '—'}</RecordField>
+              <RecordField label="Entrega est.">{item.estimated_end_date || '—'}</RecordField>
+            </RecordCard>
+          ))}
+        </RecordCardList>
+        <DesktopOnly>
         <div className="overflow-x-auto rounded-xl border border-zinc-200 bg-white">
           <table className="min-w-full text-sm">
             <thead className="bg-zinc-50 text-left text-xs uppercase tracking-wide text-zinc-500">
@@ -256,6 +293,8 @@ export function OrdersPage() {
             </tbody>
           </table>
         </div>
+        </DesktopOnly>
+        </>
       ) : null}
 
       {open ? (

@@ -8,6 +8,7 @@ import { EmptyState } from '../../components/ui/EmptyState'
 import { Field, PrimaryButton, SecondaryButton, TextArea, TextInput } from '../../components/ui/FormField'
 import { Modal } from '../../components/ui/Modal'
 import { PageHeader } from '../../components/ui/PageHeader'
+import { DesktopOnly, RecordCard, RecordCardList, RecordField } from '../../components/ui/RecordCard'
 import { formatMinuteRate } from '../../lib/money'
 import { supabase } from '../../lib/supabase'
 import type { Client } from '../../types/database'
@@ -144,6 +145,35 @@ export function ClientsPage() {
       ) : null}
 
       {(query.data?.length ?? 0) > 0 ? (
+        <>
+        <RecordCardList>
+          {query.data?.map((client) => (
+            <RecordCard
+              key={client.id}
+              title={client.name}
+              subtitle={client.active ? 'Activo' : 'Inactivo'}
+              actions={
+                <>
+                  <button className="text-zinc-500 hover:text-zinc-900" onClick={() => startEdit(client)}>
+                    <Pencil className="h-4 w-4" />
+                  </button>
+                  <button
+                    className="text-rose-500 hover:text-rose-700"
+                    onClick={() => {
+                      if (confirm('¿Eliminar este cliente?')) void remove.mutate(client.id)
+                    }}
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </button>
+                </>
+              }
+            >
+              <RecordField label="Valor minuto">{formatMinuteRate(client.minute_rate)}</RecordField>
+              <RecordField label="Notas">{client.notes || '—'}</RecordField>
+            </RecordCard>
+          ))}
+        </RecordCardList>
+        <DesktopOnly>
         <div className="overflow-x-auto rounded-xl border border-zinc-200 bg-white">
           <table className="min-w-full text-sm">
             <thead className="bg-zinc-50 text-left text-xs uppercase tracking-wide text-zinc-500">
@@ -184,6 +214,8 @@ export function ClientsPage() {
             </tbody>
           </table>
         </div>
+        </DesktopOnly>
+        </>
       ) : null}
 
       {open ? (
