@@ -139,7 +139,6 @@ export function ReferenceRoutePage() {
       </Link>
       <PageHeader
         title={reference ? `Ruta · ${reference.code} ${reference.name}` : 'Ruta operacional'}
-        description="El nº de operación es el código del proceso en esta prenda (ej. 17 = Filetear costados). El mismo nombre puede existir en otra referencia con otro número y otro tiempo."
         actions={
           <PrimaryButton onClick={startCreate}>
             <Plus className="h-4 w-4" /> Agregar operación

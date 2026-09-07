@@ -56,7 +56,7 @@ export function ResultCard({
           Aún no hay fijos para copiar.{' '}
           {href ? (
             <Link to={href} className="font-medium underline">
-              Cárgalos una vez en Resultado
+              Cárgalos una vez en Resultados
             </Link>
           ) : (
             'Cárgalos una vez; los meses siguientes se copian solos.'

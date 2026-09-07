@@ -194,7 +194,6 @@ export function OrdersPage() {
     <div>
       <PageHeader
         title="Órdenes / lotes"
-        description="El valor minuto se copia del cliente al crear el lote y no cambia si ajustas la tarifa anual."
         actions={
           <PrimaryButton onClick={startCreate}>
             <Plus className="h-4 w-4" /> Nueva orden

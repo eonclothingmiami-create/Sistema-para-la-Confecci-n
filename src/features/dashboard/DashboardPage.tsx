@@ -81,7 +81,6 @@ export function DashboardPage() {
     <div>
       <PageHeader
         title="Hoy"
-        description="Lo que importa ahora: el turno y quién necesita apoyo."
         actions={
           <Field label="Fecha">
             <TextInput type="date" value={date} onChange={(event) => setDate(event.target.value)} />

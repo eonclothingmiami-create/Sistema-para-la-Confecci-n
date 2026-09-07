@@ -158,7 +158,6 @@ export function ReportsPage() {
     <div>
       <PageHeader
         title="Este mes"
-        description={`${formatMonthLong(monthAnchor)}. Para evaluar, no para operar el turno.`}
         actions={
           <div className="flex flex-wrap items-end gap-2">
             <Field label="Mes">

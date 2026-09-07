@@ -138,7 +138,6 @@ export function ReferencesPage() {
     <div>
       <PageHeader
         title="Referencias / prendas"
-        description="Cada referencia pertenece a un cliente y usa su valor minuto."
         actions={
           <PrimaryButton onClick={startCreate}>
             <Plus className="h-4 w-4" /> Nueva referencia

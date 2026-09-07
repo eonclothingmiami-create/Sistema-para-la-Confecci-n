@@ -243,7 +243,6 @@ export function ProductionPage() {
     <div>
       <PageHeader
         title="Registro diario de producción"
-        description="Agrega solo las operaciones que hizo el operario, por su nº de proceso (ej. 17 Filetear costados)."
       />
 
       <div className="mb-4 grid gap-3 rounded-xl border border-zinc-200 bg-white p-4 sm:grid-cols-2 lg:grid-cols-4">
@@ -535,12 +534,6 @@ export function ProductionPage() {
           <p className="text-sm text-zinc-600">{message}</p>
         ) : null}
       </div>
-      <p className="mt-3 max-w-3xl text-xs text-zinc-500">
-        El nº de operación identifica el proceso de esa prenda (ej. 17 = Filetear costados). El tiempo
-        sale de la ruta de la referencia. Minutos = tiempo × unidades. Eficiencia del día = suma /
-        capacidad (horas trabajadas × 60; por defecto {DEFAULT_CAPACITY}).
-      </p>
-
       <div className="mt-4">
         <Field label="Observaciones adicionales">
           <TextArea value={headerNotes} onChange={(e) => setHeaderNotes(e.target.value)} />

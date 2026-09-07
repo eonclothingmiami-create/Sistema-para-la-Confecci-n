@@ -124,7 +124,6 @@ export function ClientsPage() {
     <div>
       <PageHeader
         title="Clientes"
-        description="Cada cliente tiene un valor minuto pactado. Se ajusta una vez al año y lo heredan todas sus referencias."
         actions={
           <PrimaryButton onClick={startCreate}>
             <Plus className="h-4 w-4" /> Nuevo cliente

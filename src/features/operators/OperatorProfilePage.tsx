@@ -253,9 +253,7 @@ export function OperatorProfilePage() {
       <PageHeader
         title={operator ? operator.name : 'Ficha de operario'}
         description={
-          operator
-            ? [operator.code, operator.position, operator.line].filter(Boolean).join(' · ')
-            : 'Hoy, el mes y el archivo.'
+          operator ? [operator.code, operator.position, operator.line].filter(Boolean).join(' · ') || undefined : undefined
         }
         actions={
           <SegmentedTabs

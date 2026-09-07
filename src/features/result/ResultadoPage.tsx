@@ -10,14 +10,19 @@ import {
   useCostCategories,
   useCreateCostCategory,
   useDeleteCostCategory,
-  useRenameCostCategory,
 } from '../../hooks/useCostCategories'
 import { formatMonthLong, startOfMonthISO, todayISO } from '../../lib/efficiency'
 import { ensureMonthFixedCosts } from '../../lib/fixedCosts'
 import { formatMoney } from '../../lib/money'
 import { sumAmounts } from '../../lib/result'
 import { supabase } from '../../lib/supabase'
-import type { CostCategory, CostEntry, ProductionOrder } from '../../types/database'
+import type { CostEntry, ProductionOrder } from '../../types/database'
+
+const OTHER_CATEGORY = 'Otro'
+
+function isOtherCategory(name: string) {
+  return name.trim().toLocaleLowerCase() === OTHER_CATEGORY.toLocaleLowerCase()
+}
 
 type CaptureTab = 'fijos' | 'variables'
 
@@ -27,8 +32,7 @@ export function ResultadoPage() {
   return (
     <div>
       <PageHeader
-        title="Resultado"
-        description="Los fijos se copian solos del mes anterior. Edítalos solo si este mes cambió. Los gastos del día se cargan el día que ocurren."
+        title="Resultados"
         actions={
           <SegmentedTabs
             value={tab}
@@ -233,10 +237,6 @@ function FixedCostsPanel() {
         <span className="font-medium text-zinc-800">{formatMoney(total)}</span>
         {categoriesQuery.isLoading || query.isFetching ? ' Cargando…' : ''}
       </p>
-      <p className="mb-3 text-sm text-zinc-500">
-        Cada mes nuevo arranca con los fijos del mes anterior. Edita y guarda solo si algo cambió.
-      </p>
-
       {rows.length === 0 ? (
         <p className="rounded-2xl border border-zinc-200 bg-white px-4 py-10 text-center text-sm text-zinc-400 sm:hidden">
           Agrega las categorías fijas de esta empresa.
@@ -394,24 +394,25 @@ function VariableCostsPanel() {
   const queryClient = useQueryClient()
   const [date, setDate] = useState(todayISO())
   const [category, setCategory] = useState('')
+  const [otherName, setOtherName] = useState('')
   const [amount, setAmount] = useState('')
   const [notes, setNotes] = useState('')
   const [orderId, setOrderId] = useState('')
-  const [newCategory, setNewCategory] = useState('')
-  const [editingId, setEditingId] = useState<string | null>(null)
-  const [editingName, setEditingName] = useState('')
 
   const categoriesQuery = useCostCategories('variable_dia')
-  const createCategory = useCreateCostCategory('variable_dia')
-  const renameCategory = useRenameCostCategory()
-  const deleteCategory = useDeleteCostCategory()
   const categories = categoriesQuery.data ?? []
+  const categoryOptions = useMemo(
+    () => [
+      ...categories.filter((item) => !isOtherCategory(item.name)),
+      { id: 'otro', name: OTHER_CATEGORY },
+    ],
+    [categories],
+  )
 
   useEffect(() => {
-    if (!category && categories[0]) setCategory(categories[0].name)
-    if (category && categories.length > 0 && !categories.some((item) => item.name === category)) {
-      setCategory(categories[0].name)
-    }
+    if (category) return
+    const first = categories.find((item) => !isOtherCategory(item.name))
+    if (first) setCategory(first.name)
   }, [categories, category])
 
   const query = useQuery({
@@ -440,12 +441,13 @@ function VariableCostsPanel() {
   const save = useMutation({
     mutationFn: async () => {
       const value = Number(amount)
-      if (!category) throw new Error('Elige o crea una categoría.')
+      const resolvedCategory = isOtherCategory(category) ? otherName.trim() : category.trim()
+      if (!resolvedCategory) throw new Error(isOtherCategory(category) ? 'Escribe cuál es el gasto.' : 'Elige una categoría.')
       if (!Number.isFinite(value) || value <= 0) throw new Error('Escribe un valor mayor a 0.')
       const { error } = await supabase.from('cost_entries').insert({
         entry_type: 'variable_dia',
         occurred_on: date,
-        category,
+        category: resolvedCategory,
         amount: value,
         notes: notes.trim() || null,
         production_order_id: orderId || null,
@@ -456,6 +458,7 @@ function VariableCostsPanel() {
       setAmount('')
       setNotes('')
       setOrderId('')
+      setOtherName('')
       await queryClient.invalidateQueries({ queryKey: ['cost_entries'] })
     },
   })
@@ -486,14 +489,22 @@ function VariableCostsPanel() {
         </Field>
         <Field label="Categoría">
           <SelectInput value={category} onChange={(event) => setCategory(event.target.value)}>
-            {categories.length === 0 ? <option value="">Crea una categoría</option> : null}
-            {categories.map((item) => (
+            {categoryOptions.map((item) => (
               <option key={item.id} value={item.name}>
                 {item.name}
               </option>
             ))}
           </SelectInput>
         </Field>
+        {isOtherCategory(category) ? (
+          <Field label="¿Cuál?">
+            <TextInput
+              value={otherName}
+              onChange={(event) => setOtherName(event.target.value)}
+              placeholder="Nombre del gasto"
+            />
+          </Field>
+        ) : null}
         <Field label="Valor">
           <TextInput
             type="number"
@@ -531,59 +542,6 @@ function VariableCostsPanel() {
         ) : null}
       </form>
 
-      <CategoryManager
-        categories={categories}
-        newName={newCategory}
-        onNewNameChange={setNewCategory}
-        editingId={editingId}
-        editingName={editingName}
-        onEditingIdChange={setEditingId}
-        onEditingNameChange={setEditingName}
-        onAdd={() => {
-          createCategory.mutate(newCategory, {
-            onSuccess: (created) => {
-              setNewCategory('')
-              setCategory(created.name)
-            },
-          })
-        }}
-        onRename={(item) => {
-          renameCategory.mutate(
-            {
-              id: item.id,
-              entryType: 'variable_dia',
-              previousName: item.name,
-              nextName: editingName,
-            },
-            {
-              onSuccess: () => {
-                if (category === item.name) setCategory(editingName.trim())
-                setEditingId(null)
-              },
-            },
-          )
-        }}
-        onDelete={(item) => {
-          if (
-            confirm(
-              `¿Quitar "${item.name}" de la lista? Los gastos ya cargados quedan en el historial.`,
-            )
-          ) {
-            deleteCategory.mutate({
-              id: item.id,
-              entryType: 'variable_dia',
-              name: item.name,
-            })
-          }
-        }}
-        addPending={createCategory.isPending}
-        error={
-          (createCategory.error as Error | null)?.message ||
-          (renameCategory.error as Error | null)?.message ||
-          (deleteCategory.error as Error | null)?.message
-        }
-      />
-
       <p className="mb-3 text-sm text-zinc-500">
         Gastos de este día: <span className="font-medium text-zinc-800">{formatMoney(total)}</span>
       </p>
@@ -619,94 +577,6 @@ function VariableCostsPanel() {
           </ul>
         )}
       </div>
-    </div>
-  )
-}
-
-function CategoryManager({
-  categories,
-  newName,
-  onNewNameChange,
-  editingId,
-  editingName,
-  onEditingIdChange,
-  onEditingNameChange,
-  onAdd,
-  onRename,
-  onDelete,
-  addPending,
-  error,
-}: {
-  categories: CostCategory[]
-  newName: string
-  onNewNameChange: (value: string) => void
-  editingId: string | null
-  editingName: string
-  onEditingIdChange: (id: string | null) => void
-  onEditingNameChange: (value: string) => void
-  onAdd: () => void
-  onRename: (item: CostCategory) => void
-  onDelete: (item: CostCategory) => void
-  addPending: boolean
-  error?: string
-}) {
-  return (
-    <div className="mb-5 rounded-2xl border border-zinc-200 bg-white p-4">
-      <p className="mb-3 text-sm font-medium text-zinc-800">Categorías de esta empresa</p>
-      <div className="mb-3 flex flex-wrap gap-2">
-        <TextInput
-          placeholder="Nueva categoría"
-          value={newName}
-          onChange={(event) => onNewNameChange(event.target.value)}
-          className="max-w-xs"
-        />
-        <SecondaryButton type="button" onClick={onAdd} disabled={addPending || !newName.trim()}>
-          <Plus className="h-4 w-4" />
-          Agregar
-        </SecondaryButton>
-      </div>
-      <ul className="divide-y divide-zinc-100">
-        {categories.map((item) => (
-          <li key={item.id} className="flex flex-col gap-2 py-2 sm:flex-row sm:items-center sm:justify-between">
-            {editingId === item.id ? (
-              <TextInput value={editingName} onChange={(event) => onEditingNameChange(event.target.value)} />
-            ) : (
-              <span className="min-w-0 text-sm text-zinc-800">{item.name}</span>
-            )}
-            <div className="flex flex-wrap gap-2">
-              {editingId === item.id ? (
-                <>
-                  <SecondaryButton type="button" onClick={() => onRename(item)}>
-                    Guardar
-                  </SecondaryButton>
-                  <SecondaryButton type="button" onClick={() => onEditingIdChange(null)}>
-                    Cancelar
-                  </SecondaryButton>
-                </>
-              ) : (
-                <SecondaryButton
-                  type="button"
-                  onClick={() => {
-                    onEditingIdChange(item.id)
-                    onEditingNameChange(item.name)
-                  }}
-                >
-                  Renombrar
-                </SecondaryButton>
-              )}
-              <button
-                type="button"
-                className="text-rose-500 hover:text-rose-700"
-                title="Quitar categoría"
-                onClick={() => onDelete(item)}
-              >
-                <Trash2 className="h-4 w-4" />
-              </button>
-            </div>
-          </li>
-        ))}
-      </ul>
-      {error ? <p className="mt-3 text-sm text-rose-600">{error}</p> : null}
     </div>
   )
 }
