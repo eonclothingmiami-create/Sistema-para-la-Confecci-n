@@ -125,7 +125,7 @@ export function ReportsPage() {
       ? monthMoney.result.result - previousMoney.result.result
       : null
   const dayMoneyRows = monthMoney.result.days.filter(
-    (item) => item.revenue > 0 || item.variableCosts > 0 || item.allocatedFixed > 0,
+    (item) => item.revenue > 0 || item.variableCosts > 0,
   )
 
   function exportCsv() {
