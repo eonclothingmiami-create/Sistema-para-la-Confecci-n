@@ -47,13 +47,13 @@ export function ResultCard({
       ) : null}
       {!hasFixed ? (
         <p className="mt-3 text-sm text-amber-700">
-          Aún no hay fijos de este mes.{' '}
+          Aún no hay fijos para copiar.{' '}
           {href ? (
             <Link to={href} className="font-medium underline">
-              Cárgalos en Resultado
+              Cárgalos una vez en Resultado
             </Link>
           ) : (
-            'Cárgalos para que el resultado esté completo.'
+            'Cárgalos una vez; los meses siguientes se copian solos.'
           )}
         </p>
       ) : null}

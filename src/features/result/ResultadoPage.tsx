@@ -11,7 +11,8 @@ import {
   useDeleteCostCategory,
   useRenameCostCategory,
 } from '../../hooks/useCostCategories'
-import { formatMonthLong, shiftMonthISO, startOfMonthISO, todayISO } from '../../lib/efficiency'
+import { formatMonthLong, startOfMonthISO, todayISO } from '../../lib/efficiency'
+import { ensureMonthFixedCosts } from '../../lib/fixedCosts'
 import { formatMoney } from '../../lib/money'
 import { sumAmounts } from '../../lib/result'
 import { supabase } from '../../lib/supabase'
@@ -26,7 +27,7 @@ export function ResultadoPage() {
     <div>
       <PageHeader
         title="Resultado"
-        description="Las categorías las arma cada empresa. Los fijos se cargan una vez al mes; los gastos del día, el día que ocurren."
+        description="Los fijos se copian solos del mes anterior. Edítalos solo si este mes cambió. Los gastos del día se cargan el día que ocurren."
         actions={
           <SegmentedTabs
             value={tab}
@@ -47,7 +48,6 @@ function FixedCostsPanel() {
   const queryClient = useQueryClient()
   const [month, setMonth] = useState(todayISO().slice(0, 7))
   const occurredOn = startOfMonthISO(`${month}-01`)
-  const previousOn = startOfMonthISO(shiftMonthISO(occurredOn, -1))
   const categoriesQuery = useCostCategories('fijo_mes')
   const createCategory = useCreateCostCategory('fijo_mes')
   const deleteCategory = useDeleteCostCategory()
@@ -55,38 +55,24 @@ function FixedCostsPanel() {
   const query = useQuery({
     queryKey: ['cost_entries', 'fijo_mes', occurredOn],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from('cost_entries')
-        .select('*')
-        .eq('entry_type', 'fijo_mes')
-        .eq('occurred_on', occurredOn)
-      if (error) throw error
-      return data as CostEntry[]
+      const { entries, copiedFrom } = await ensureMonthFixedCosts(occurredOn)
+      if (copiedFrom) {
+        await queryClient.invalidateQueries({ queryKey: ['cost_categories'] })
+      }
+      return entries
     },
   })
-
-  const previousQuery = useQuery({
-    queryKey: ['cost_entries', 'fijo_mes', previousOn],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from('cost_entries')
-        .select('*')
-        .eq('entry_type', 'fijo_mes')
-        .eq('occurred_on', previousOn)
-      if (error) throw error
-      return data as CostEntry[]
-    },
-  })
+  const savedEntries = query.data ?? []
 
   const [draft, setDraft] = useState<Record<string, { name: string; amount: string; notes: string }>>({})
 
   const catalog = categoriesQuery.data ?? []
   const catalogNames = new Set(catalog.map((item) => item.name))
-  const orphanEntries = (query.data ?? []).filter((entry) => !catalogNames.has(entry.category))
+  const orphanEntries = savedEntries.filter((entry) => !catalogNames.has(entry.category))
 
   const rows = useMemo(() => {
     const fromCatalog = catalog.map((category) => {
-      const saved = query.data?.find((item) => item.category === category.name)
+      const saved = savedEntries.find((item) => item.category === category.name)
       const local = draft[category.id]
       return {
         key: category.id,
@@ -112,7 +98,7 @@ function FixedCostsPanel() {
       }
     })
     return [...fromCatalog, ...orphans]
-  }, [catalog, draft, orphanEntries, query.data])
+  }, [catalog, draft, orphanEntries, savedEntries])
 
   const total = rows.reduce((sum, row) => sum + (Number(row.amount) || 0), 0)
 
@@ -191,47 +177,6 @@ function FixedCostsPanel() {
     },
   })
 
-  const copyPrevious = useMutation({
-    mutationFn: async () => {
-      const previous = previousQuery.data ?? []
-      if (previous.length === 0) throw new Error('El mes anterior no tiene fijos.')
-      const existingNames = new Set(catalog.map((item) => item.name.toLocaleLowerCase()))
-      for (const item of previous) {
-        if (!existingNames.has(item.category.toLocaleLowerCase())) {
-          const { error } = await supabase.from('cost_categories').insert({
-            entry_type: 'fijo_mes',
-            name: item.category,
-            sort_order: Date.now() % 100000,
-          })
-          if (error && error.code !== '23505') throw error
-          existingNames.add(item.category.toLocaleLowerCase())
-        }
-        const existing = query.data?.find((row) => row.category === item.category)
-        if (existing) {
-          const { error: updateError } = await supabase
-            .from('cost_entries')
-            .update({ amount: item.amount, notes: item.notes })
-            .eq('id', existing.id)
-          if (updateError) throw updateError
-          continue
-        }
-        const { error: insertError } = await supabase.from('cost_entries').insert({
-          entry_type: 'fijo_mes',
-          occurred_on: occurredOn,
-          category: item.category,
-          amount: item.amount,
-          notes: item.notes,
-        })
-        if (insertError) throw insertError
-      }
-    },
-    onSuccess: async () => {
-      setDraft({})
-      await queryClient.invalidateQueries({ queryKey: ['cost_entries'] })
-      await queryClient.invalidateQueries({ queryKey: ['cost_categories'] })
-    },
-  })
-
   function updateDraft(key: string, patch: Partial<{ name: string; amount: string; notes: string }>, current: {
     name: string
     amount: string
@@ -276,13 +221,6 @@ function FixedCostsPanel() {
             <Plus className="h-4 w-4" />
             Agregar categoría
           </SecondaryButton>
-          <SecondaryButton
-            type="button"
-            onClick={() => copyPrevious.mutate()}
-            disabled={copyPrevious.isPending || (previousQuery.data?.length ?? 0) === 0}
-          >
-            Copiar mes anterior
-          </SecondaryButton>
           <PrimaryButton type="button" onClick={() => save.mutate()} disabled={save.isPending}>
             {save.isPending ? 'Guardando…' : 'Guardar fijos'}
           </PrimaryButton>
@@ -290,8 +228,12 @@ function FixedCostsPanel() {
       </div>
 
       <p className="mb-3 text-sm text-zinc-500">
-        {formatMonthLong(occurredOn)}. Total fijos: <span className="font-medium text-zinc-800">{formatMoney(total)}</span>
-        {categoriesQuery.isLoading ? ' Cargando categorías…' : ''}
+        {formatMonthLong(occurredOn)}. Total fijos:{' '}
+        <span className="font-medium text-zinc-800">{formatMoney(total)}</span>
+        {categoriesQuery.isLoading || query.isFetching ? ' Cargando…' : ''}
+      </p>
+      <p className="mb-3 text-sm text-zinc-500">
+        Cada mes nuevo arranca con los fijos del mes anterior. Edita y guarda solo si algo cambió.
       </p>
 
       <div className="overflow-x-auto rounded-2xl border border-zinc-200 bg-white">
@@ -371,9 +313,9 @@ function FixedCostsPanel() {
           {(save.error as Error).message || 'No se pudieron guardar los fijos.'}
         </p>
       ) : null}
-      {copyPrevious.error ? (
+      {query.error ? (
         <p className="mt-3 text-sm text-rose-600">
-          {(copyPrevious.error as Error).message || 'No se pudo copiar el mes anterior.'}
+          {(query.error as Error).message || 'No se pudieron cargar los fijos.'}
         </p>
       ) : null}
       {createCategory.error ? (

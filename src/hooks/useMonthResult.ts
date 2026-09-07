@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
 import { endOfMonthISO, startOfMonthISO } from '../lib/efficiency'
+import { ensureMonthFixedCosts } from '../lib/fixedCosts'
 import { buildMonthResult } from '../lib/result'
 import { supabase } from '../lib/supabase'
 import type { CostEntry, DailyProductionRevenue } from '../types/database'
@@ -24,13 +25,8 @@ export function useMonthResult(monthIso: string) {
   const fixedQuery = useQuery({
     queryKey: ['cost_entries', 'fijo_mes', from],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from('cost_entries')
-        .select('*')
-        .eq('entry_type', 'fijo_mes')
-        .eq('occurred_on', from)
-      if (error) throw error
-      return data as CostEntry[]
+      const { entries } = await ensureMonthFixedCosts(from)
+      return entries
     },
   })
 
