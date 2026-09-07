@@ -52,6 +52,133 @@ export function daysAgoISO(days: number): string {
   return new Date(date.getTime() - offset * 60_000).toISOString().slice(0, 10)
 }
 
+function fromLocalDate(year: number, monthIndex: number, day: number): string {
+  const date = new Date(year, monthIndex, day)
+  const offset = date.getTimezoneOffset()
+  return new Date(date.getTime() - offset * 60_000).toISOString().slice(0, 10)
+}
+
+export function startOfMonthISO(iso: string = todayISO()): string {
+  const [year, month] = iso.split('-').map(Number)
+  return fromLocalDate(year, month - 1, 1)
+}
+
+export function endOfMonthISO(iso: string = todayISO()): string {
+  const [year, month] = iso.split('-').map(Number)
+  return fromLocalDate(year, month, 0)
+}
+
+export function shiftMonthISO(iso: string, delta: number): string {
+  const [year, month] = iso.split('-').map(Number)
+  return fromLocalDate(year, month - 1 + delta, 1)
+}
+
+export function formatMonthLong(iso: string): string {
+  const [year, month] = iso.split('-').map(Number)
+  return new Date(year, month - 1, 1).toLocaleDateString('es-CO', { month: 'long', year: 'numeric' })
+}
+
+export function eachDateISO(from: string, to: string): string[] {
+  const dates: string[] = []
+  const cursor = new Date(`${from}T00:00:00`)
+  const end = new Date(`${to}T00:00:00`)
+  while (cursor <= end) {
+    const offset = cursor.getTimezoneOffset()
+    dates.push(new Date(cursor.getTime() - offset * 60_000).toISOString().slice(0, 10))
+    cursor.setDate(cursor.getDate() + 1)
+  }
+  return dates
+}
+
+export function statusHex(value: number): string {
+  const status = efficiencyStatus(value)
+  if (status === 'green') return '#059669'
+  if (status === 'yellow') return '#d97706'
+  return '#e11d48'
+}
+
+export interface WorkshopDayPoint {
+  date: string
+  label: string
+  efficiency: number | null
+  minutes: number
+  units: number
+  defective: number
+}
+
+export function workshopDailySeries(rows: DailyOperatorEfficiency[]): WorkshopDayPoint[] {
+  const byDate = new Map<string, DailyOperatorEfficiency[]>()
+  for (const row of rows) {
+    const list = byDate.get(row.production_date) ?? []
+    list.push(row)
+    byDate.set(row.production_date, list)
+  }
+
+  return [...byDate.keys()]
+    .sort()
+    .map((date) => {
+      const summaries = aggregateOperatorsByDay(byDate.get(date) ?? [])
+      const minutes = summaries.reduce((sum, item) => sum + item.total_delivered_minutes, 0)
+      const units = summaries.reduce((sum, item) => sum + item.total_delivered_units, 0)
+      const defective = summaries.reduce((sum, item) => sum + item.total_defective_units, 0)
+      return {
+        date,
+        label: date.slice(8),
+        efficiency: summaries.length > 0 ? overallEfficiency(summaries) : null,
+        minutes,
+        units,
+        defective,
+      }
+    })
+}
+
+export function fillDailySeries(from: string, to: string, points: WorkshopDayPoint[]): WorkshopDayPoint[] {
+  const byDate = new Map(points.map((point) => [point.date, point]))
+  return eachDateISO(from, to).map((date) => {
+    const existing = byDate.get(date)
+    if (existing) return existing
+    return {
+      date,
+      label: date.slice(8),
+      efficiency: null,
+      minutes: 0,
+      units: 0,
+      defective: 0,
+    }
+  })
+}
+
+/** Periodo de varios días: suma minutos y capacidad de cada jornada, no un solo 510. */
+export function aggregateOperatorsByPeriod(rows: DailyOperatorEfficiency[]): OperatorDailySummary[] {
+  const byOperator = new Map<string, DailyOperatorEfficiency[]>()
+  for (const row of rows) {
+    const list = byOperator.get(row.operator_id) ?? []
+    list.push(row)
+    byOperator.set(row.operator_id, list)
+  }
+
+  return [...byOperator.entries()]
+    .map(([operatorId, operatorRows]) => {
+      const days = rollupOperatorDays(operatorRows)
+      const minutes = days.reduce((sum, item) => sum + item.total_delivered_minutes, 0)
+      const capacity = days.reduce((sum, item) => sum + item.installed_capacity_minutes, 0)
+      const units = days.reduce((sum, item) => sum + item.total_delivered_units, 0)
+      const defective = days.reduce((sum, item) => sum + item.total_defective_units, 0)
+      const efficiency = capacity > 0 ? (minutes / capacity) * 100 : 0
+      return {
+        operator_id: operatorId,
+        operator_name: operatorRows[0]?.operator_name ?? '',
+        installed_capacity_minutes: capacity,
+        total_delivered_minutes: minutes,
+        total_delivered_units: units,
+        total_defective_units: defective,
+        efficiency_percentage: efficiency,
+        status: efficiencyStatus(efficiency),
+      }
+    })
+    .sort((a, b) => b.efficiency_percentage - a.efficiency_percentage)
+}
+
 export interface OperatorDayRollup {
   production_date: string
   installed_capacity_minutes: number

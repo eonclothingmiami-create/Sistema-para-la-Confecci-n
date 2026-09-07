@@ -1,44 +1,35 @@
 import { useQuery } from '@tanstack/react-query'
-import { Activity, Clock3, TriangleAlert, Users } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
-import {
-  Bar,
-  BarChart,
-  CartesianGrid,
-  ResponsiveContainer,
-  Tooltip,
-  XAxis,
-  YAxis,
-} from 'recharts'
+import { WeekDots } from '../../components/charts/WeekDots'
 import { Field, TextInput } from '../../components/ui/FormField'
 import { PageHeader } from '../../components/ui/PageHeader'
-import { StatusBadge, StatusDot } from '../../components/ui/StatusBadge'
+import { StatusBadge } from '../../components/ui/StatusBadge'
 import {
   aggregateOperatorsByDay,
-  formatMinutes,
+  fillDailySeries,
   formatPercent,
   mermaPercent,
   overallEfficiency,
   todayISO,
+  workshopDailySeries,
 } from '../../lib/efficiency'
 import { supabase } from '../../lib/supabase'
-import type {
-  DailyOperatorEfficiency,
-  OrderEfficiency,
-  ReferenceEfficiency,
-} from '../../types/database'
+import type { DailyOperatorEfficiency, OrderEfficiency, ReferenceEfficiency } from '../../types/database'
 
 export function DashboardPage() {
   const [date, setDate] = useState(todayISO())
+  const [showBreakdown, setShowBreakdown] = useState(false)
+  const weekFrom = daysAgoISOFrom(date, 6)
 
-  const operatorRows = useQuery({
-    queryKey: ['dashboard_today_operator_efficiency', date],
+  const weekQuery = useQuery({
+    queryKey: ['dashboard_week', weekFrom, date],
     queryFn: async () => {
       const { data, error } = await supabase
-        .from('dashboard_today_operator_efficiency')
+        .from('daily_operator_efficiency')
         .select('*')
-        .eq('production_date', date)
+        .gte('production_date', weekFrom)
+        .lte('production_date', date)
       if (error) throw error
       return data as DailyOperatorEfficiency[]
     },
@@ -46,11 +37,9 @@ export function DashboardPage() {
 
   const referenceRows = useQuery({
     queryKey: ['reference_efficiency', date],
+    enabled: showBreakdown,
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from('reference_efficiency')
-        .select('*')
-        .eq('production_date', date)
+      const { data, error } = await supabase.from('reference_efficiency').select('*').eq('production_date', date)
       if (error) throw error
       return data as ReferenceEfficiency[]
     },
@@ -58,6 +47,7 @@ export function DashboardPage() {
 
   const orderRows = useQuery({
     queryKey: ['order_efficiency', date],
+    enabled: showBreakdown,
     queryFn: async () => {
       const { data, error } = await supabase.from('order_efficiency').select('*').eq('production_date', date)
       if (error) throw error
@@ -65,193 +55,155 @@ export function DashboardPage() {
     },
   })
 
-  const summaries = useMemo(
-    () => aggregateOperatorsByDay(operatorRows.data ?? []),
-    [operatorRows.data],
-  )
+  const todayRows = (weekQuery.data ?? []).filter((row) => row.production_date === date)
+  const summaries = useMemo(() => aggregateOperatorsByDay(todayRows), [todayRows])
   const general = overallEfficiency(summaries)
-  const minutes = summaries.reduce((sum, item) => sum + item.total_delivered_minutes, 0)
   const units = summaries.reduce((sum, item) => sum + item.total_delivered_units, 0)
   const defective = summaries.reduce((sum, item) => sum + item.total_defective_units, 0)
-  const below = summaries.filter((item) => item.status === 'red').length
+  const below = summaries.filter((item) => item.status === 'red')
+  const merma = mermaPercent(defective, units)
+
+  const weekDots = useMemo(() => {
+    const series = workshopDailySeries(weekQuery.data ?? [])
+    return fillDailySeries(weekFrom, date, series).map((point) => ({
+      ...point,
+      label: point.date.slice(8),
+    }))
+  }, [date, weekFrom, weekQuery.data])
 
   return (
     <div>
       <PageHeader
-        title="Dashboard operativo"
-        description="Eficiencia del día. Se actualiza cuando cambian los registros de producción."
+        title="Hoy"
+        description="Lo que importa ahora: el turno y quién necesita apoyo."
         actions={
           <Field label="Fecha">
-            <TextInput type="date" value={date} onChange={(e) => setDate(e.target.value)} />
+            <TextInput type="date" value={date} onChange={(event) => setDate(event.target.value)} />
           </Field>
         }
       />
 
-      <div className="mb-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
-        <Kpi icon={Activity} label="Eficiencia general" value={formatPercent(general)} />
-        <Kpi icon={Clock3} label="Minutos entregados" value={formatMinutes(minutes)} />
-        <Kpi icon={Users} label="Operarios activos hoy" value={String(summaries.length)} />
-        <Kpi icon={TriangleAlert} label="Operarios bajo meta" value={String(below)} />
-        <Kpi
-          icon={TriangleAlert}
-          label="Merma del día"
-          value={`${defective} · ${formatPercent(mermaPercent(defective, units))}`}
-        />
-      </div>
-
-      {operatorRows.error ? (
-        <p className="mb-4 text-sm text-rose-600">
-          No se pudo leer el dashboard. ¿Ya corriste las migraciones SQL en Supabase?
-        </p>
+      {weekQuery.error ? (
+        <p className="mb-4 text-sm text-rose-600">No se pudo leer el dashboard.</p>
       ) : null}
 
-      <div className="mb-5 overflow-x-auto rounded-xl border border-zinc-200 bg-white">
-        <table className="min-w-full text-sm">
-          <thead className="bg-zinc-50 text-left text-xs uppercase tracking-wide text-zinc-500">
-            <tr>
-              <th className="px-3 py-2.5">Operario</th>
-              <th className="px-3 py-2.5">Min. entregados</th>
-              <th className="px-3 py-2.5">Capacidad</th>
-              <th className="px-3 py-2.5">Defectuosas</th>
-              <th className="px-3 py-2.5">Eficiencia</th>
-              <th className="px-3 py-2.5">Estado</th>
-            </tr>
-          </thead>
-          <tbody>
-            {summaries.length === 0 ? (
-              <tr>
-                <td colSpan={6} className="px-3 py-8 text-center text-zinc-500">
-                  Sin registros para esta fecha.
-                </td>
-              </tr>
-            ) : (
-              summaries.map((item) => (
-                <tr key={item.operator_id} className="border-t border-zinc-100">
-                  <td className="px-3 py-2.5 font-medium text-zinc-900">
-                    <Link to={`/operarios/${item.operator_id}`} className="hover:underline">
-                      {item.operator_name}
-                    </Link>
-                  </td>
-                  <td className="px-3 py-2.5 tabular">{formatMinutes(item.total_delivered_minutes)}</td>
-                  <td className="px-3 py-2.5 tabular">{formatMinutes(item.installed_capacity_minutes)}</td>
-                  <td className="px-3 py-2.5 tabular">{item.total_defective_units}</td>
-                  <td className="px-3 py-2.5 tabular font-semibold">
-                    {formatPercent(item.efficiency_percentage)}
-                  </td>
-                  <td className="px-3 py-2.5">
-                    <span className="inline-flex items-center gap-2">
-                      <StatusDot value={item.efficiency_percentage} />
-                      <StatusBadge value={item.efficiency_percentage} />
-                    </span>
-                  </td>
-                </tr>
-              ))
-            )}
-          </tbody>
-        </table>
-      </div>
-
-      <div className="mb-5 rounded-xl border border-zinc-200 bg-white p-4">
-        <h2 className="mb-3 text-sm font-semibold text-zinc-800">Eficiencia por operario</h2>
-        <div className="h-72">
-          {summaries.length === 0 ? (
-            <p className="grid h-full place-items-center text-sm text-zinc-500">Sin datos para graficar.</p>
-          ) : (
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={summaries}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#e4e4e7" />
-                <XAxis dataKey="operator_name" tick={{ fontSize: 12 }} />
-                <YAxis tick={{ fontSize: 12 }} />
-                <Tooltip formatter={(value) => formatPercent(Number(value ?? 0))} />
-                <Bar dataKey="efficiency_percentage" fill="#3f3f46" radius={[6, 6, 0, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
-          )}
+      <section className="mb-6 rounded-2xl border border-zinc-200 bg-white p-5 sm:p-6">
+        <p className="text-xs font-medium tracking-wide text-zinc-400 uppercase">Eficiencia del taller</p>
+        <div className="mt-2 flex flex-wrap items-end justify-between gap-4">
+          <div>
+            <p className="text-5xl font-semibold tracking-tight tabular text-zinc-900">
+              {summaries.length === 0 ? '—' : formatPercent(general)}
+            </p>
+            <div className="mt-3 flex flex-wrap items-center gap-2">
+              {summaries.length > 0 ? <StatusBadge value={general} /> : null}
+              <span className="text-sm text-zinc-500">
+                {summaries.length} operario{summaries.length === 1 ? '' : 's'}
+                {below.length > 0 ? ` · ${below.length} bajo meta` : summaries.length > 0 ? ' · todos en rango' : ''}
+                {units > 0 ? ` · merma ${formatPercent(merma)}` : ''}
+              </span>
+            </div>
+          </div>
+          <div>
+            <p className="mb-2 text-right text-[11px] text-zinc-400">Últimos 7 días</p>
+            <WeekDots days={weekDots} />
+          </div>
         </div>
-      </div>
+        {below.length > 0 ? (
+          <p className="mt-4 text-sm text-zinc-600">
+            Hoy hay que mirar a{' '}
+            {below.map((item, index) => (
+              <span key={item.operator_id}>
+                {index > 0 ? (index === below.length - 1 ? ' y ' : ', ') : null}
+                <Link to={`/operarios/${item.operator_id}`} className="font-medium text-zinc-900 hover:underline">
+                  {item.operator_name}
+                </Link>
+              </span>
+            ))}
+            .
+          </p>
+        ) : null}
+      </section>
 
-      <div className="grid gap-4 xl:grid-cols-2">
-        <SimpleTable
-          title="Eficiencia por referencia"
-          rows={(referenceRows.data ?? []).map((row) => ({
-            key: row.reference_id,
-            name: `${row.reference_code} · ${row.reference_name}`,
-            minutes: Number(row.total_delivered_minutes),
-            efficiency: Number(row.efficiency_percentage),
-          }))}
-        />
-        <SimpleTable
-          title="Eficiencia por orden / lote"
-          rows={(orderRows.data ?? []).map((row) => ({
-            key: row.production_order_id,
-            name: `${row.order_number} · ${row.reference_code}`,
-            minutes: Number(row.total_delivered_minutes),
-            efficiency: Number(row.efficiency_percentage),
-          }))}
-        />
-      </div>
+      <section className="mb-4 overflow-hidden rounded-2xl border border-zinc-200 bg-white">
+        {summaries.length === 0 ? (
+          <p className="px-5 py-10 text-center text-sm text-zinc-400">Sin registros para esta fecha.</p>
+        ) : (
+          <ul>
+            {summaries.map((item) => (
+              <li key={item.operator_id} className="flex items-center justify-between gap-3 border-t border-zinc-100 px-5 py-3.5 first:border-t-0">
+                <Link to={`/operarios/${item.operator_id}`} className="truncate font-medium text-zinc-900 hover:underline">
+                  {item.operator_name}
+                </Link>
+                <StatusBadge value={item.efficiency_percentage} />
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
+
+      <button
+        type="button"
+        onClick={() => setShowBreakdown((value) => !value)}
+        className="text-sm text-zinc-500 hover:text-zinc-800"
+      >
+        {showBreakdown ? 'Ocultar prendas y lotes' : 'Ver por prenda y lote'}
+      </button>
+
+      {showBreakdown ? (
+        <div className="mt-4 grid gap-4 xl:grid-cols-2">
+          <QuietTable
+            title="Por referencia"
+            rows={(referenceRows.data ?? []).map((row) => ({
+              key: row.reference_id,
+              name: `${row.reference_code} · ${row.reference_name}`,
+              efficiency: Number(row.efficiency_percentage),
+            }))}
+          />
+          <QuietTable
+            title="Por orden / lote"
+            rows={(orderRows.data ?? []).map((row) => ({
+              key: row.production_order_id,
+              name: `${row.order_number} · ${row.reference_code}`,
+              efficiency: Number(row.efficiency_percentage),
+            }))}
+          />
+        </div>
+      ) : null}
     </div>
   )
 }
 
-function Kpi({
-  icon: Icon,
-  label,
-  value,
-}: {
-  icon: typeof Activity
-  label: string
-  value: string
-}) {
-  return (
-    <div className="rounded-xl border border-zinc-200 bg-white p-4">
-      <div className="mb-2 flex items-center gap-2 text-zinc-500">
-        <Icon className="h-4 w-4" />
-        <span className="text-xs font-medium">{label}</span>
-      </div>
-      <p className="truncate text-2xl font-semibold tabular text-zinc-900">{value}</p>
-    </div>
-  )
+function daysAgoISOFrom(iso: string, days: number): string {
+  const date = new Date(`${iso}T00:00:00`)
+  date.setDate(date.getDate() - days)
+  const year = date.getFullYear()
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const day = String(date.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
 }
 
-function SimpleTable({
+function QuietTable({
   title,
   rows,
 }: {
   title: string
-  rows: { key: string; name: string; minutes: number; efficiency: number }[]
+  rows: { key: string; name: string; efficiency: number }[]
 }) {
   return (
-    <div className="overflow-x-auto rounded-xl border border-zinc-200 bg-white">
-      <div className="border-b border-zinc-100 px-4 py-3 text-sm font-semibold text-zinc-800">{title}</div>
-      <table className="min-w-full text-sm">
-        <thead className="text-left text-xs uppercase tracking-wide text-zinc-500">
-          <tr>
-            <th className="px-3 py-2">Nombre</th>
-            <th className="px-3 py-2">Minutos</th>
-            <th className="px-3 py-2">Eficiencia</th>
-          </tr>
-        </thead>
-        <tbody>
-          {rows.length === 0 ? (
-            <tr>
-              <td colSpan={3} className="px-3 py-6 text-center text-zinc-500">
-                Sin datos.
-              </td>
-            </tr>
-          ) : (
-            rows.map((row) => (
-              <tr key={row.key} className="border-t border-zinc-100">
-                <td className="px-3 py-2">{row.name}</td>
-                <td className="px-3 py-2 tabular">{formatMinutes(row.minutes)}</td>
-                <td className="px-3 py-2">
-                  <StatusBadge value={row.efficiency} />
-                </td>
-              </tr>
-            ))
-          )}
-        </tbody>
-      </table>
+    <div className="overflow-hidden rounded-2xl border border-zinc-200 bg-white">
+      <div className="px-4 py-3 text-sm font-medium text-zinc-700">{title}</div>
+      {rows.length === 0 ? (
+        <p className="px-4 pb-5 text-sm text-zinc-400">Sin datos.</p>
+      ) : (
+        <ul className="border-t border-zinc-100">
+          {rows.map((row) => (
+            <li key={row.key} className="flex items-center justify-between gap-3 px-4 py-2.5 text-sm">
+              <span className="truncate text-zinc-700">{row.name}</span>
+              <StatusBadge value={row.efficiency} />
+            </li>
+          ))}
+        </ul>
+      )}
     </div>
   )
 }

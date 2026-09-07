@@ -117,7 +117,7 @@ export function OperatorsPage() {
     <div>
       <PageHeader
         title="Operarios"
-        description="Catálogo de personal. Entra a la ficha para ver historial y productividad."
+        description="Catálogo de personal. Entra a la ficha para ver el día, el mes y el archivo."
         actions={
           <PrimaryButton onClick={startCreate}>
             <Plus className="h-4 w-4" /> Nuevo operario

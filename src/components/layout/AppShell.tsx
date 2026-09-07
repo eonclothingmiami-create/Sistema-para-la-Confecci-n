@@ -23,7 +23,7 @@ const links = [
   { to: '/clientes', label: 'Clientes', icon: Building2 },
   { to: '/referencias', label: 'Referencias', icon: Shirt },
   { to: '/ordenes', label: 'Órdenes', icon: Factory },
-  { to: '/reportes', label: 'Reportes', icon: Scissors },
+  { to: '/reportes', label: 'Este mes', icon: Scissors },
 ]
 
 export function AppShell() {
