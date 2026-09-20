@@ -42,7 +42,7 @@ export function useInstallPrompt() {
     }
   }, [])
 
-  const visible = !standalone && !dismissed && (Boolean(deferred) || ios || narrow)
+  const visible = !standalone && !dismissed && (ios || narrow)
 
   const install = useCallback(async () => {
     if (!deferred) return

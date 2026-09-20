@@ -6,12 +6,14 @@ import { Link } from 'react-router-dom'
 import { useForm } from 'react-hook-form'
 import { z } from 'zod'
 import { EmptyState } from '../../components/ui/EmptyState'
-import { Field, PrimaryButton, SecondaryButton, TextArea, TextInput } from '../../components/ui/FormField'
+import { Field, PrimaryButton, SecondaryButton, SelectInput, TextArea, TextInput } from '../../components/ui/FormField'
 import { Modal } from '../../components/ui/Modal'
 import { PageHeader } from '../../components/ui/PageHeader'
 import { DesktopOnly, RecordCard, RecordCardList, RecordField } from '../../components/ui/RecordCard'
+import { useAuth } from '../../hooks/useAuth'
+import { isStaffRole } from '../../lib/access'
 import { supabase } from '../../lib/supabase'
-import type { Operator } from '../../types/database'
+import { ACCESS_ROLE_LABELS, type Operator, type OperatorAccessRole } from '../../types/database'
 
 const schema = z.object({
   name: z.string().min(2, 'Nombre requerido'),
@@ -20,6 +22,8 @@ const schema = z.object({
   position: z.string().optional(),
   line: z.string().optional(),
   hire_date: z.string().optional(),
+  email: z.union([z.literal(''), z.string().email('Correo inválido')]).optional(),
+  access_role: z.enum(['admin', 'contador', 'operario']),
   active: z.boolean(),
   notes: z.string().optional(),
 })
@@ -33,12 +37,34 @@ const emptyValues: FormValues = {
   position: '',
   line: '',
   hire_date: '',
+  email: '',
+  access_role: 'operario',
   active: true,
   notes: '',
 }
 
+function linkStatus(operator: Operator) {
+  if (!operator.email) return 'Sin correo'
+  if (operator.user_id) return 'Vinculado'
+  return 'Pendiente de cuenta'
+}
+
+function operatorSaveError(error: unknown) {
+  const err = error as { code?: string; message?: string }
+  const message = err.message ?? ''
+  if (err.code === '23505' || /duplicate|unique|vinculado a otro/i.test(message)) {
+    return 'Ese correo ya está en otra ficha.'
+  }
+  if (/desarrollador/i.test(message)) {
+    return 'Ese correo es la cuenta desarrollador y no se puede vincular a un operario.'
+  }
+  return message || 'No se pudo guardar. Revisa los datos.'
+}
+
 export function OperatorsPage() {
   const queryClient = useQueryClient()
+  const { profile } = useAuth()
+  const canManageIdentity = isStaffRole(profile?.role)
   const [open, setOpen] = useState(false)
   const [editing, setEditing] = useState<Operator | null>(null)
 
@@ -58,8 +84,8 @@ export function OperatorsPage() {
 
   const save = useMutation({
     mutationFn: async (values: FormValues) => {
-      const payload = {
-        name: values.name,
+      const payload: Record<string, unknown> = {
+        name: values.name.trim(),
         code: values.code || null,
         document: values.document || null,
         position: values.position || null,
@@ -67,6 +93,10 @@ export function OperatorsPage() {
         hire_date: values.hire_date || null,
         active: values.active,
         notes: values.notes || null,
+      }
+      if (canManageIdentity) {
+        payload.email = values.email?.trim() ? values.email.trim().toLowerCase() : null
+        payload.access_role = values.access_role
       }
       if (editing) {
         const { error } = await supabase.from('operators').update(payload).eq('id', editing.id)
@@ -108,6 +138,8 @@ export function OperatorsPage() {
       position: operator.position ?? '',
       line: operator.line ?? '',
       hire_date: operator.hire_date ?? '',
+      email: operator.email ?? '',
+      access_role: operator.access_role ?? 'operario',
       active: operator.active,
       notes: operator.notes ?? '',
     })
@@ -169,8 +201,9 @@ export function OperatorsPage() {
             >
               <RecordField label="Código">{operator.code || '—'}</RecordField>
               <RecordField label="Documento">{operator.document || '—'}</RecordField>
-              <RecordField label="Cargo">{operator.position || '—'}</RecordField>
-              <RecordField label="Línea">{operator.line || '—'}</RecordField>
+              <RecordField label="Correo">{operator.email || '—'}</RecordField>
+              <RecordField label="Rol">{ACCESS_ROLE_LABELS[operator.access_role] ?? 'Operario'}</RecordField>
+              <RecordField label="Acceso">{linkStatus(operator)}</RecordField>
             </RecordCard>
           ))}
         </RecordCardList>
@@ -181,9 +214,9 @@ export function OperatorsPage() {
               <tr>
                 <th className="px-3 py-2.5">Nombre</th>
                 <th className="px-3 py-2.5">Código</th>
-                <th className="px-3 py-2.5">Documento</th>
-                <th className="px-3 py-2.5">Cargo</th>
-                <th className="px-3 py-2.5">Línea</th>
+                <th className="px-3 py-2.5">Correo</th>
+                <th className="px-3 py-2.5">Rol</th>
+                <th className="px-3 py-2.5">Acceso</th>
                 <th className="px-3 py-2.5">Estado</th>
                 <th className="px-3 py-2.5" />
               </tr>
@@ -197,9 +230,11 @@ export function OperatorsPage() {
                     </Link>
                   </td>
                   <td className="px-3 py-2.5 text-zinc-600">{operator.code || '—'}</td>
-                  <td className="px-3 py-2.5 text-zinc-600">{operator.document || '—'}</td>
-                  <td className="px-3 py-2.5 text-zinc-600">{operator.position || '—'}</td>
-                  <td className="px-3 py-2.5 text-zinc-600">{operator.line || '—'}</td>
+                  <td className="px-3 py-2.5 text-zinc-600">{operator.email || '—'}</td>
+                  <td className="px-3 py-2.5 text-zinc-600">
+                    {ACCESS_ROLE_LABELS[operator.access_role] ?? 'Operario'}
+                  </td>
+                  <td className="px-3 py-2.5 text-zinc-600">{linkStatus(operator)}</td>
                   <td className="px-3 py-2.5">
                     <span className={operator.active ? 'text-emerald-700' : 'text-zinc-400'}>
                       {operator.active ? 'Activo' : 'Inactivo'}
@@ -261,6 +296,26 @@ export function OperatorsPage() {
             <Field label="Fecha de ingreso">
               <TextInput type="date" {...form.register('hire_date')} />
             </Field>
+            {canManageIdentity ? (
+              <>
+                <Field label="Correo para entrar" error={form.formState.errors.email?.message}>
+                  <TextInput type="email" autoComplete="off" placeholder="opcional" {...form.register('email')} />
+                </Field>
+                <Field label="Rol de acceso">
+                  <SelectInput {...form.register('access_role')}>
+                    {(Object.keys(ACCESS_ROLE_LABELS) as OperatorAccessRole[]).map((role) => (
+                      <option key={role} value={role}>
+                        {ACCESS_ROLE_LABELS[role]}
+                      </option>
+                    ))}
+                  </SelectInput>
+                </Field>
+                <p className="text-xs text-zinc-500 sm:col-span-2">
+                  Si pones un correo, esa persona entra con Crear cuenta usando el mismo correo. El rol decide qué
+                  pantallas ve: operario (captura y su ficha), contador (sin piso) o administrador (todo).
+                </p>
+              </>
+            ) : null}
             <label className="flex items-center gap-2 text-sm text-zinc-700 sm:col-span-2">
               <input type="checkbox" {...form.register('active')} /> Activo
             </label>
@@ -270,7 +325,7 @@ export function OperatorsPage() {
               </Field>
             </div>
             {save.error ? (
-              <p className="text-sm text-rose-600 sm:col-span-2">No se pudo guardar. Revisa los datos.</p>
+              <p className="text-sm text-rose-600 sm:col-span-2">{operatorSaveError(save.error)}</p>
             ) : null}
             <div className="flex justify-end gap-2 sm:col-span-2">
               <SecondaryButton type="button" onClick={() => setOpen(false)}>

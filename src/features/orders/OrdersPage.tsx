@@ -54,7 +54,7 @@ export function OrdersPage() {
   const [editing, setEditing] = useState<ProductionOrder | null>(null)
 
   const referencesQuery = useQuery({
-    queryKey: ['garment_references'],
+    queryKey: ['garment_references', 'catalog'],
     queryFn: async () => {
       const { data, error } = await supabase
         .from('garment_references')
@@ -66,7 +66,7 @@ export function OrdersPage() {
   })
 
   const query = useQuery({
-    queryKey: ['production_orders'],
+    queryKey: ['production_orders', 'list'],
     queryFn: async () => {
       const { data, error } = await supabase
         .from('production_orders')

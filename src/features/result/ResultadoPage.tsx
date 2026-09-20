@@ -440,7 +440,7 @@ function VariableCostsPanel() {
   })
 
   const ordersQuery = useQuery({
-    queryKey: ['production_orders'],
+    queryKey: ['production_orders', 'catalog'],
     queryFn: async () => {
       const { data, error } = await supabase.from('production_orders').select('*').order('order_number')
       if (error) throw error

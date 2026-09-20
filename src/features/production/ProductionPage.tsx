@@ -1,10 +1,14 @@
 import { useMutation, useQuery } from '@tanstack/react-query'
 import { Plus, Trash2 } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
+import { EmptyState } from '../../components/ui/EmptyState'
 import { Field, PrimaryButton, SecondaryButton, SelectInput, TextArea, TextInput } from '../../components/ui/FormField'
+import { Modal } from '../../components/ui/Modal'
 import { PageHeader } from '../../components/ui/PageHeader'
 import { DesktopOnly, RecordCard, RecordCardList, RecordField } from '../../components/ui/RecordCard'
 import { StatusBadge } from '../../components/ui/StatusBadge'
+import { useAuth } from '../../hooks/useAuth'
+import { isShopFloorRole } from '../../lib/access'
 import {
   DEFAULT_CAPACITY,
   capacityFromWorkedHours,
@@ -19,6 +23,7 @@ import {
 import { queryClient } from '../../lib/query-client'
 import { supabase } from '../../lib/supabase'
 import type {
+  DailyOperatorEfficiency,
   DailyProductionEntry,
   DailyProductionHeader,
   Operator,
@@ -33,7 +38,36 @@ interface EntryDraft {
   notes: string
 }
 
+interface DayCapture {
+  id: string
+  operator_id: string
+  production_order_id: string
+  operators: { name: string } | null
+  production_orders: {
+    order_number: string
+    garment_references: { code: string } | null
+  } | null
+  daily_production_entries: { delivered_units: number }[] | null
+}
+
+function asOne<T>(value: T | T[] | null | undefined): T | null {
+  if (Array.isArray(value)) return value[0] ?? null
+  return value ?? null
+}
+
+function captureUnits(item: DayCapture) {
+  return (item.daily_production_entries ?? []).reduce((sum, row) => sum + Number(row.delivered_units || 0), 0)
+}
+
+function captureLabel(item: DayCapture) {
+  const operator = item.operators?.name ?? 'Operario'
+  const lote = item.production_orders?.order_number ?? 'lote'
+  return { operator, lote }
+}
+
 export function ProductionPage() {
+  const { profile, linkedOperator, loadingLinkedOperator, loadingProfile } = useAuth()
+  const shopFloor = isShopFloorRole(profile?.role)
   const [date, setDate] = useState(todayISO())
   const [operatorId, setOperatorId] = useState('')
   const [orderId, setOrderId] = useState('')
@@ -45,6 +79,13 @@ export function ProductionPage() {
   const [drafts, setDrafts] = useState<EntryDraft[]>([])
   const [addOperationId, setAddOperationId] = useState('')
   const [message, setMessage] = useState<string | null>(null)
+  const [pendingDelete, setPendingDelete] = useState<DayCapture | null>(null)
+
+  useEffect(() => {
+    if (shopFloor && linkedOperator?.id) {
+      setOperatorId(linkedOperator.id)
+    }
+  }, [shopFloor, linkedOperator?.id])
 
   const operatorsQuery = useQuery({
     queryKey: ['operators'],
@@ -56,7 +97,7 @@ export function ProductionPage() {
   })
 
   const ordersQuery = useQuery({
-    queryKey: ['production_orders'],
+    queryKey: ['production_orders', 'list'],
     queryFn: async () => {
       const { data, error } = await supabase
         .from('production_orders')
@@ -111,7 +152,63 @@ export function ProductionPage() {
     },
   })
 
+  const dayCapturesQuery = useQuery({
+    queryKey: ['daily_headers', date, shopFloor ? operatorId : 'all'],
+    enabled: Boolean(date) && (!shopFloor || Boolean(operatorId)),
+    queryFn: async () => {
+      let request = supabase
+        .from('daily_production_headers')
+        .select(
+          'id, operator_id, production_order_id, operators(name), production_orders(order_number, garment_references(code)), daily_production_entries(delivered_units)',
+        )
+        .eq('production_date', date)
+        .order('created_at', { ascending: true })
+      if (shopFloor && operatorId) request = request.eq('operator_id', operatorId)
+      const { data, error } = await request
+      if (error) throw error
+      return (data ?? []).map((row) => ({
+        id: row.id,
+        operator_id: row.operator_id,
+        production_order_id: row.production_order_id,
+        operators: asOne(row.operators),
+        production_orders: (() => {
+          const order = asOne(row.production_orders)
+          if (!order) return null
+          return {
+            order_number: order.order_number,
+            garment_references: asOne(order.garment_references),
+          }
+        })(),
+        daily_production_entries: row.daily_production_entries ?? [],
+      })) as DayCapture[]
+    },
+  })
+
+  const operatorDayQuery = useQuery({
+    queryKey: ['daily_operator_efficiency', date, operatorId],
+    enabled: Boolean(date && operatorId),
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('daily_operator_efficiency')
+        .select('*')
+        .eq('production_date', date)
+        .eq('operator_id', operatorId)
+      if (error) throw error
+      return data as DailyOperatorEfficiency[]
+    },
+  })
+
   useEffect(() => {
+    if (!operatorId || !orderId) {
+      setDrafts([])
+      setAddOperationId('')
+      setCapacity(DEFAULT_CAPACITY)
+      setWorkedHours('')
+      setStartTime('')
+      setEndTime('')
+      setHeaderNotes('')
+      return
+    }
     const existing = existingQuery.data
     const existingRows = existing?.entries ?? []
     setDrafts(
@@ -150,6 +247,25 @@ export function ProductionPage() {
     const efficiency = capacity > 0 ? (totalMinutes / capacity) * 100 : 0
     return { perOp, totalMinutes, efficiency }
   }, [drafts, operationsQuery.data, capacity])
+
+  const dayLive = useMemo(() => {
+    if (!operatorId) return null
+    const saved = operatorDayQuery.data ?? []
+    const otherRows = orderId ? saved.filter((row) => row.production_order_id !== orderId) : saved
+    const otherMinutes = otherRows.reduce((sum, row) => sum + Number(row.total_delivered_minutes), 0)
+    const otherCapacity = otherRows.reduce((max, row) => Math.max(max, Number(row.installed_capacity_minutes)), 0)
+    const minutes = otherMinutes + totals.totalMinutes
+    const dayCapacity = Math.max(otherCapacity, capacity)
+    const efficiency = dayCapacity > 0 ? (minutes / dayCapacity) * 100 : 0
+    return {
+      minutes,
+      capacity: dayCapacity,
+      efficiency,
+      otherMinutes,
+      otherLots: otherRows.length,
+      thisMinutes: totals.totalMinutes,
+    }
+  }, [operatorId, orderId, operatorDayQuery.data, totals.totalMinutes, capacity])
 
   const save = useMutation({
     mutationFn: async () => {
@@ -210,6 +326,27 @@ export function ProductionPage() {
     },
   })
 
+  const removeCapture = useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase.from('daily_production_headers').delete().eq('id', id)
+      if (error) throw error
+    },
+    onSuccess: async (_data, id) => {
+      const wasOpen = loadedHeader?.id === id
+      setPendingDelete(null)
+      setMessage('Captura eliminada.')
+      if (wasOpen) {
+        setOperatorId('')
+        setOrderId('')
+        setDrafts([])
+      }
+      await queryClient.invalidateQueries()
+    },
+    onError: () => {
+      setMessage('No se pudo borrar la captura.')
+    },
+  })
+
   function updateDraft(operationId: string, patch: Partial<EntryDraft>) {
     setDrafts((current) =>
       current.map((item) => (item.reference_operation_id === operationId ? { ...item, ...patch } : item)),
@@ -239,6 +376,27 @@ export function ProductionPage() {
     setDrafts((current) => current.filter((item) => item.reference_operation_id !== operationId))
   }
 
+  const loadedHeader =
+    operatorId &&
+    orderId &&
+    existingQuery.data?.header?.operator_id === operatorId &&
+    existingQuery.data.header.production_order_id === orderId
+      ? existingQuery.data.header
+      : null
+
+  if (loadingProfile || (shopFloor && loadingLinkedOperator)) {
+    return <p className="text-sm text-zinc-500">Cargando…</p>
+  }
+
+  if (shopFloor && !linkedOperator) {
+    return (
+      <EmptyState
+        title="Tu ficha no está vinculada"
+        description="Pide al administrador que vincule tu correo en Operarios para registrar tu producción."
+      />
+    )
+  }
+
   return (
     <div>
       <PageHeader
@@ -250,14 +408,18 @@ export function ProductionPage() {
           <TextInput type="date" value={date} onChange={(e) => setDate(e.target.value)} />
         </Field>
         <Field label="Operario">
-          <SelectInput value={operatorId} onChange={(e) => setOperatorId(e.target.value)}>
-            <option value="">Seleccionar…</option>
-            {operatorsQuery.data?.map((operator) => (
-              <option key={operator.id} value={operator.id}>
-                {operator.name}
-              </option>
-            ))}
-          </SelectInput>
+          {shopFloor ? (
+            <TextInput readOnly value={linkedOperator?.name ?? ''} />
+          ) : (
+            <SelectInput value={operatorId} onChange={(e) => setOperatorId(e.target.value)}>
+              <option value="">Seleccionar…</option>
+              {operatorsQuery.data?.map((operator) => (
+                <option key={operator.id} value={operator.id}>
+                  {operator.name}
+                </option>
+              ))}
+            </SelectInput>
+          )}
         </Field>
         <Field label="Orden / lote">
           <SelectInput value={orderId} onChange={(e) => setOrderId(e.target.value)}>
@@ -319,19 +481,78 @@ export function ProductionPage() {
         </Field>
       </div>
 
+      {dayCapturesQuery.data && dayCapturesQuery.data.length > 0 ? (
+        <section className="mb-4">
+          <p className="mb-2 text-sm font-medium text-zinc-800">Capturas de este día</p>
+          <div className="space-y-3">
+            {dayCapturesQuery.data.map((item) => {
+              const { operator, lote } = captureLabel(item)
+              const code = item.production_orders?.garment_references?.code
+              const selected = loadedHeader?.id === item.id
+              return (
+                <article
+                  key={item.id}
+                  className={`flex items-stretch overflow-hidden rounded-2xl border bg-white ${
+                    selected ? 'border-zinc-900' : 'border-zinc-200'
+                  }`}
+                >
+                  <button
+                    type="button"
+                    className="min-w-0 flex-1 p-4 text-left"
+                    onClick={() => {
+                      if (!shopFloor) setOperatorId(item.operator_id)
+                      setOrderId(item.production_order_id)
+                      setMessage(null)
+                    }}
+                  >
+                    <p className="truncate text-sm font-semibold text-zinc-900">{operator}</p>
+                    <p className="mt-0.5 truncate text-sm text-zinc-500">
+                      {lote}
+                      {code ? ` · ${code}` : ''}
+                    </p>
+                    <p className="mt-2 text-xs text-zinc-400">{captureUnits(item)} und. entregadas</p>
+                  </button>
+                  <button
+                    type="button"
+                    className="inline-flex min-h-11 min-w-11 shrink-0 items-center justify-center self-center pr-3 text-rose-500 hover:text-rose-700"
+                    title="Borrar captura"
+                    onClick={() => setPendingDelete(item)}
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </button>
+                </article>
+              )
+            })}
+          </div>
+        </section>
+      ) : null}
+
       <div className="mb-4 grid gap-3 rounded-xl border border-zinc-200 bg-white px-4 py-3 sm:grid-cols-3">
         <div>
-          <p className="text-xs text-zinc-500">Total minutos entregados del día</p>
-          <p className="tabular text-lg font-semibold">{formatMinutes(totals.totalMinutes)}</p>
+          <p className="text-xs text-zinc-500">Minutos entregados hoy</p>
+          <p className="tabular text-lg font-semibold">
+            {formatMinutes(dayLive?.minutes ?? totals.totalMinutes)}
+          </p>
+          {dayLive && dayLive.otherLots > 0 ? (
+            <p className="mt-0.5 text-xs text-zinc-500">
+              Este cuadro {formatMinutes(dayLive.thisMinutes)} · otras capturas {formatMinutes(dayLive.otherMinutes)}
+            </p>
+          ) : (
+            <p className="mt-0.5 text-xs text-zinc-500">
+              {operatorId ? 'Lo que lleva el operario en el día' : 'Selecciona un operario para ver el día'}
+            </p>
+          )}
         </div>
         <div>
           <p className="text-xs text-zinc-500">Capacidad instalada del día</p>
-          <p className="tabular text-lg font-semibold">{formatMinutes(capacity)}</p>
+          <p className="tabular text-lg font-semibold">
+            {formatMinutes(dayLive?.capacity ?? capacity)}
+          </p>
         </div>
         <div>
           <p className="text-xs text-zinc-500">Eficiencia del día</p>
           <div className="mt-1">
-            <StatusBadge value={totals.efficiency} />
+            <StatusBadge value={dayLive?.efficiency ?? totals.efficiency} />
           </div>
         </div>
       </div>
@@ -377,7 +598,7 @@ export function ProductionPage() {
                 actions={
                   <button
                     type="button"
-                    className="text-rose-500 hover:text-rose-700"
+                    className="inline-flex min-h-11 min-w-11 items-center justify-center text-rose-500 hover:text-rose-700"
                     onClick={() => removeOperationRow(draft.reference_operation_id)}
                     title="Quitar del cuadro"
                   >
@@ -497,7 +718,7 @@ export function ProductionPage() {
                     <td className="px-3 py-2">
                       <button
                         type="button"
-                        className="text-rose-500 hover:text-rose-700"
+                        className="inline-flex min-h-11 min-w-11 items-center justify-center text-rose-500 hover:text-rose-700"
                         onClick={() => removeOperationRow(draft.reference_operation_id)}
                         title="Quitar del cuadro"
                       >
@@ -518,8 +739,9 @@ export function ProductionPage() {
         </p>
       ) : null}
 
-      <div className="mt-4 flex flex-wrap items-center gap-3">
+      <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
         <PrimaryButton
+          className="min-h-11 w-full sm:w-auto"
           disabled={!operatorId || !orderId || drafts.length === 0 || save.isPending}
           onClick={() => {
             setMessage(null)
@@ -528,6 +750,37 @@ export function ProductionPage() {
         >
           {save.isPending ? 'Guardando…' : 'Guardar captura'}
         </PrimaryButton>
+        {loadedHeader ? (
+          <button
+            type="button"
+            className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-lg border border-rose-200 bg-white px-3.5 py-2 text-sm font-medium text-rose-600 hover:bg-rose-50 sm:w-auto"
+            onClick={() => {
+              const fromList = dayCapturesQuery.data?.find((item) => item.id === loadedHeader.id)
+              setPendingDelete(
+                fromList ?? {
+                  id: loadedHeader.id,
+                  operator_id: operatorId,
+                  production_order_id: orderId,
+                  operators: operatorsQuery.data?.find((item) => item.id === operatorId)
+                    ? { name: operatorsQuery.data.find((item) => item.id === operatorId)!.name }
+                    : null,
+                  production_orders: selectedOrder
+                    ? {
+                        order_number: selectedOrder.order_number,
+                        garment_references: selectedOrder.garment_references
+                          ? { code: selectedOrder.garment_references.code }
+                          : null,
+                      }
+                    : null,
+                  daily_production_entries: null,
+                },
+              )
+            }}
+          >
+            <Trash2 className="h-4 w-4" />
+            Borrar captura
+          </button>
+        ) : null}
         {drafts.length === 0 && operatorId && orderId ? (
           <p className="text-sm text-zinc-500">Agrega al menos una operación al cuadro para guardar.</p>
         ) : message ? (
@@ -539,6 +792,28 @@ export function ProductionPage() {
           <TextArea value={headerNotes} onChange={(e) => setHeaderNotes(e.target.value)} />
         </Field>
       </div>
+
+      {pendingDelete ? (
+        <Modal title="Borrar captura" onClose={() => setPendingDelete(null)}>
+          <p className="text-sm text-zinc-600">
+            Se borra la captura de {captureLabel(pendingDelete).operator} del {date} en{' '}
+            {captureLabel(pendingDelete).lote}.
+          </p>
+          <div className="mt-5 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+            <SecondaryButton className="min-h-11 w-full sm:w-auto" onClick={() => setPendingDelete(null)}>
+              Cancelar
+            </SecondaryButton>
+            <button
+              type="button"
+              className="inline-flex min-h-11 w-full items-center justify-center rounded-lg bg-rose-600 px-3.5 py-2 text-sm font-medium text-white hover:bg-rose-700 disabled:opacity-50 sm:w-auto"
+              disabled={removeCapture.isPending}
+              onClick={() => void removeCapture.mutate(pendingDelete.id)}
+            >
+              {removeCapture.isPending ? 'Eliminando…' : 'Eliminar'}
+            </button>
+          </div>
+        </Modal>
+      ) : null}
     </div>
   )
 }

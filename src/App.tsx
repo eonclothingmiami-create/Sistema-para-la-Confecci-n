@@ -8,6 +8,7 @@ import { OperatorProfilePage } from './features/operators/OperatorProfilePage'
 import { OperatorsPage } from './features/operators/OperatorsPage'
 import { OrdersPage } from './features/orders/OrdersPage'
 import { ProductionPage } from './features/production/ProductionPage'
+import { ReferenceProgressPage } from './features/references/ReferenceProgressPage'
 import { ReferenceRoutePage } from './features/references/ReferenceRoutePage'
 import { ReferencesPage } from './features/references/ReferencesPage'
 import { ReportsPage } from './features/reports/ReportsPage'
@@ -28,11 +29,13 @@ export default function App() {
         >
           <Route index element={<DashboardPage />} />
           <Route path="produccion" element={<ProductionPage />} />
+          <Route path="mi" element={<OperatorProfilePage self />} />
           <Route path="operarios" element={<OperatorsPage />} />
           <Route path="operarios/:id" element={<OperatorProfilePage />} />
           <Route path="clientes" element={<ClientsPage />} />
           <Route path="referencias" element={<ReferencesPage />} />
           <Route path="referencias/:id/ruta" element={<ReferenceRoutePage />} />
+          <Route path="referencias/:id/avance" element={<ReferenceProgressPage />} />
           <Route path="ordenes" element={<OrdersPage />} />
           <Route path="reportes" element={<ReportsPage />} />
           <Route path="resultado" element={<ResultadoPage />} />

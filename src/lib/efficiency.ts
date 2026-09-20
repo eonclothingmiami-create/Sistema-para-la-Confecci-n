@@ -38,6 +38,21 @@ export function formatMinutes(value: number): string {
   return value.toFixed(2)
 }
 
+/** SAM de la prenda = suma de tiempos estándar de procesos activos. */
+export function samTotal(
+  operations: Array<{ standard_minutes: number | string; active?: boolean }> | null | undefined,
+) {
+  const total = (operations ?? [])
+    .filter((operation) => operation.active !== false)
+    .reduce((sum, operation) => sum + Number(operation.standard_minutes), 0)
+  return Number(total.toFixed(4))
+}
+
+export function formatSam(minutes: number) {
+  if (minutes <= 0) return '—'
+  return `${formatMinutes(minutes)} min`
+}
+
 export function todayISO(): string {
   const now = new Date()
   const offset = now.getTimezoneOffset()

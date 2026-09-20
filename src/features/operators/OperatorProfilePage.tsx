@@ -23,18 +23,16 @@ import {
   todayISO,
 } from '../../lib/efficiency'
 import { supabase } from '../../lib/supabase'
-import type {
-  DailyOperatorEfficiency,
-  GarmentReference,
-  Operator,
-  ProductionEntryCalculation,
-  ProductionOrder,
-} from '../../types/database'
+import { useAuth } from '../../hooks/useAuth'
+import { isShopFloorRole } from '../../lib/access'
+import { ACCESS_ROLE_LABELS, type DailyOperatorEfficiency, type GarmentReference, type Operator, type ProductionEntryCalculation, type ProductionOrder } from '../../types/database'
 
 type ProfileTab = 'hoy' | 'mes' | 'historial'
 
-export function OperatorProfilePage() {
-  const { id } = useParams<{ id: string }>()
+export function OperatorProfilePage({ self = false }: { self?: boolean }) {
+  const { id: paramId } = useParams<{ id: string }>()
+  const { linkedOperator, loadingLinkedOperator, profile } = useAuth()
+  const id = self ? linkedOperator?.id : paramId
   const [tab, setTab] = useState<ProfileTab>('hoy')
   const [showInfo, setShowInfo] = useState(false)
   const [from, setFrom] = useState(daysAgoISO(90))
@@ -58,7 +56,7 @@ export function OperatorProfilePage() {
   })
 
   const referencesQuery = useQuery({
-    queryKey: ['garment_references'],
+    queryKey: ['garment_references', 'catalog'],
     enabled: tab === 'historial',
     queryFn: async () => {
       const { data, error } = await supabase.from('garment_references').select('*').order('code')
@@ -68,7 +66,7 @@ export function OperatorProfilePage() {
   })
 
   const ordersQuery = useQuery({
-    queryKey: ['production_orders'],
+    queryKey: ['production_orders', 'catalog'],
     enabled: tab === 'historial',
     queryFn: async () => {
       const { data, error } = await supabase.from('production_orders').select('*').order('order_number')
@@ -244,16 +242,43 @@ export function OperatorProfilePage() {
   }, [detailQuery.data, historyQuery.data, operationsQuery.data, orderId, referenceId])
 
   const operator = operatorQuery.data
+  const hideWorkshopLink = self || isShopFloorRole(profile?.role)
+
+  if (self && loadingLinkedOperator) {
+    return <p className="text-sm text-zinc-500">Cargando…</p>
+  }
+
+  if (self && !linkedOperator) {
+    return (
+      <EmptyState
+        title="Tu ficha no está vinculada"
+        description="Pide al administrador que vincule tu correo en Operarios. Después de eso verás aquí tu rendimiento."
+      />
+    )
+  }
 
   return (
     <div>
-      <Link to="/operarios" className="mb-3 inline-flex items-center gap-1 text-sm text-zinc-500 hover:text-zinc-800">
-        <ArrowLeft className="h-4 w-4" /> Operarios
-      </Link>
+      {hideWorkshopLink ? null : (
+        <Link to="/operarios" className="mb-3 inline-flex items-center gap-1 text-sm text-zinc-500 hover:text-zinc-800">
+          <ArrowLeft className="h-4 w-4" /> Operarios
+        </Link>
+      )}
       <PageHeader
-        title={operator ? operator.name : 'Ficha de operario'}
+        title={operator ? operator.name : self ? 'Mi rendimiento' : 'Ficha de operario'}
         description={
-          operator ? [operator.code, operator.position, operator.line].filter(Boolean).join(' · ') || undefined : undefined
+          operator
+            ? [
+                operator.code,
+                operator.position,
+                operator.line,
+                operator.email,
+                ACCESS_ROLE_LABELS[operator.access_role],
+                operator.email ? (operator.user_id ? 'Vinculado' : 'Pendiente de cuenta') : 'Sin correo',
+              ]
+                .filter(Boolean)
+                .join(' · ') || undefined
+            : undefined
         }
         actions={
           <SegmentedTabs

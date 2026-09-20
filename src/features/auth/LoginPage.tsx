@@ -5,6 +5,7 @@ import { Navigate, useLocation } from 'react-router-dom'
 import { z } from 'zod'
 import { Field, PrimaryButton, TextInput } from '../../components/ui/FormField'
 import { useAuth } from '../../hooks/useAuth'
+import { canAccessPath, homePathForRole } from '../../lib/access'
 import { supabase } from '../../lib/supabase'
 
 const loginSchema = z.object({
@@ -26,7 +27,7 @@ type LoginValues = z.infer<typeof loginSchema>
 type SignupValues = z.infer<typeof signupSchema>
 
 export function LoginPage() {
-  const { session, initializing } = useAuth()
+  const { session, initializing, profile, loadingProfile } = useAuth()
   const location = useLocation()
   const [mode, setMode] = useState<'login' | 'signup'>('login')
   const [error, setError] = useState<string | null>(null)
@@ -47,8 +48,12 @@ export function LoginPage() {
   }
 
   if (session) {
-    const from = (location.state as { from?: string } | null)?.from ?? '/'
-    return <Navigate to={from} replace />
+    if (loadingProfile || !profile) {
+      return <div className="grid min-h-screen place-items-center text-sm text-zinc-500">Cargando…</div>
+    }
+    const from = (location.state as { from?: string } | null)?.from
+    const dest = from && canAccessPath(profile.role, from) ? from : homePathForRole(profile.role)
+    return <Navigate to={dest} replace />
   }
 
   async function onLogin(values: LoginValues) {

@@ -7,6 +7,7 @@ import {
   Menu,
   Scissors,
   Shirt,
+  User,
   Users,
   Wallet,
   X,
@@ -14,37 +15,31 @@ import {
 import { useState } from 'react'
 import { NavLink, Outlet } from 'react-router-dom'
 import { InstallBanner } from '../ui/InstallBanner'
+import { RequireRole } from '../../features/auth/RequireRole'
 import { useInstallPrompt } from '../../hooks/useInstallPrompt'
 import { useAuth } from '../../hooks/useAuth'
 import { useRealtimeInvalidation } from '../../hooks/useRealtimeInvalidation'
+import { navModulesForRole } from '../../lib/access'
 import { supabase } from '../../lib/supabase'
 import { ROLE_LABELS } from '../../types/database'
 
-const modules = [
-  {
-    title: 'Operatividad',
-    links: [
-      { to: '/', label: 'Dashboard', icon: LayoutDashboard, end: true },
-      { to: '/produccion', label: 'Producción', icon: ClipboardList },
-      { to: '/ordenes', label: 'Órdenes', icon: Factory },
-      { to: '/referencias', label: 'Referencias', icon: Shirt },
-      { to: '/clientes', label: 'Clientes', icon: Building2 },
-      { to: '/operarios', label: 'Operarios', icon: Users },
-    ],
-  },
-  {
-    title: 'Contabilidad',
-    links: [
-      { to: '/resultado', label: 'Costos y gastos', icon: Wallet },
-      { to: '/reportes', label: 'Este mes', icon: Scissors },
-    ],
-  },
-]
+const navIcons = {
+  '/': LayoutDashboard,
+  '/produccion': ClipboardList,
+  '/ordenes': Factory,
+  '/referencias': Shirt,
+  '/clientes': Building2,
+  '/operarios': Users,
+  '/resultado': Wallet,
+  '/reportes': Scissors,
+  '/mi': User,
+} as const
 
 export function AppShell() {
   const { user, profile } = useAuth()
   const [open, setOpen] = useState(false)
   const install = useInstallPrompt()
+  const modules = navModulesForRole(profile?.role)
   useRealtimeInvalidation()
 
   async function signOut() {
@@ -69,13 +64,15 @@ export function AppShell() {
         </div>
         <nav className="flex flex-col gap-4 overflow-y-auto p-3">
           {modules.map((module) => (
-            <div key={module.title}>
-              <p className="mb-1 px-3 text-[11px] font-semibold tracking-wide text-zinc-400 uppercase">
-                {module.title}
-              </p>
+            <div key={module.title ?? 'menu'}>
+              {module.title ? (
+                <p className="mb-1 px-3 text-[11px] font-semibold tracking-wide text-zinc-400 uppercase">
+                  {module.title}
+                </p>
+              ) : null}
               <div className="flex flex-col gap-1">
                 {module.links.map((link) => {
-                  const Icon = link.icon
+                  const Icon = navIcons[link.to as keyof typeof navIcons] ?? ClipboardList
                   return (
                     <NavLink
                       key={link.to}
@@ -141,7 +138,9 @@ export function AppShell() {
           </div>
         </header>
         <main className={`min-w-0 p-4 sm:p-6 ${install.visible ? 'pb-36' : ''}`}>
-          <Outlet />
+          <RequireRole>
+            <Outlet />
+          </RequireRole>
         </main>
         <InstallBanner prompt={install} />
       </div>

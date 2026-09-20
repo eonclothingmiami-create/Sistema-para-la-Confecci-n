@@ -1,6 +1,6 @@
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Pencil, Plus, Route, Trash2 } from 'lucide-react'
+import { FileText, Pencil, Plus, Route, Trash2 } from 'lucide-react'
 import { useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { Link } from 'react-router-dom'
@@ -17,6 +17,7 @@ import {
 import { Modal } from '../../components/ui/Modal'
 import { PageHeader } from '../../components/ui/PageHeader'
 import { DesktopOnly, RecordCard, RecordCardList, RecordField } from '../../components/ui/RecordCard'
+import { formatSam, samTotal } from '../../lib/efficiency'
 import { formatMinuteRate } from '../../lib/money'
 import { supabase } from '../../lib/supabase'
 import type { Client, GarmentReference } from '../../types/database'
@@ -56,11 +57,11 @@ export function ReferencesPage() {
   })
 
   const query = useQuery({
-    queryKey: ['garment_references'],
+    queryKey: ['garment_references', 'list'],
     queryFn: async () => {
       const { data, error } = await supabase
         .from('garment_references')
-        .select('*, clients(id, name, minute_rate)')
+        .select('*, clients(id, name, minute_rate), reference_operations(standard_minutes, active)')
         .order('code')
       if (error) throw error
       return data as GarmentReference[]
@@ -164,8 +165,19 @@ export function ReferencesPage() {
               subtitle={item.active ? 'Activa' : 'Inactiva'}
               actions={
                 <>
-                  <Link to={`/referencias/${item.id}/ruta`} className="text-zinc-600 hover:text-zinc-900" title="Ruta operacional">
+                  <Link
+                    to={`/referencias/${item.id}/ruta`}
+                    className="inline-flex min-h-11 min-w-11 items-center justify-center text-zinc-600 hover:text-zinc-900"
+                    title="Ruta operacional"
+                  >
                     <Route className="h-4 w-4" />
+                  </Link>
+                  <Link
+                    to={`/referencias/${item.id}/avance`}
+                    className="inline-flex min-h-11 min-w-11 items-center justify-center text-zinc-600 hover:text-zinc-900"
+                    title="Avance por operación"
+                  >
+                    <FileText className="h-4 w-4" />
                   </Link>
                   <button className="text-zinc-500 hover:text-zinc-900" onClick={() => startEdit(item)}>
                     <Pencil className="h-4 w-4" />
@@ -186,6 +198,7 @@ export function ReferencesPage() {
               <RecordField label="Valor min.">
                 {item.clients ? formatMinuteRate(item.clients.minute_rate) : '—'}
               </RecordField>
+              <RecordField label="SAM">{formatSam(samTotal(item.reference_operations))}</RecordField>
             </RecordCard>
           ))}
         </RecordCardList>
@@ -199,6 +212,7 @@ export function ReferencesPage() {
                 <th className="px-3 py-2.5">Tipo</th>
                 <th className="px-3 py-2.5">Cliente</th>
                 <th className="px-3 py-2.5">Valor min.</th>
+                <th className="px-3 py-2.5">SAM</th>
                 <th className="px-3 py-2.5">Estado</th>
                 <th className="px-3 py-2.5" />
               </tr>
@@ -213,6 +227,9 @@ export function ReferencesPage() {
                   <td className="px-3 py-2.5 tabular text-zinc-600">
                     {item.clients ? formatMinuteRate(item.clients.minute_rate) : '—'}
                   </td>
+                  <td className="px-3 py-2.5 tabular text-zinc-700">
+                    {formatSam(samTotal(item.reference_operations))}
+                  </td>
                   <td className="px-3 py-2.5">{item.active ? 'Activa' : 'Inactiva'}</td>
                   <td className="px-3 py-2.5 text-right whitespace-nowrap">
                     <Link
@@ -221,6 +238,13 @@ export function ReferencesPage() {
                       title="Ruta operacional"
                     >
                       <Route className="h-4 w-4" />
+                    </Link>
+                    <Link
+                      to={`/referencias/${item.id}/avance`}
+                      className="mr-2 inline-flex text-zinc-600 hover:text-zinc-900"
+                      title="Avance por operación"
+                    >
+                      <FileText className="h-4 w-4" />
                     </Link>
                     <button className="mr-2 text-zinc-500 hover:text-zinc-900" onClick={() => startEdit(item)}>
                       <Pencil className="h-4 w-4" />

@@ -1,4 +1,5 @@
-export type UserRole = 'desarrollador' | 'admin' | 'supervisor' | 'operario' | 'consulta'
+export type UserRole = 'desarrollador' | 'admin' | 'supervisor' | 'operario' | 'consulta' | 'contador'
+export type OperatorAccessRole = 'admin' | 'contador' | 'operario'
 
 export const ROLE_LABELS: Record<UserRole, string> = {
   desarrollador: 'Desarrollador',
@@ -6,6 +7,13 @@ export const ROLE_LABELS: Record<UserRole, string> = {
   supervisor: 'Supervisor',
   operario: 'Operario',
   consulta: 'Consulta',
+  contador: 'Contador',
+}
+
+export const ACCESS_ROLE_LABELS: Record<OperatorAccessRole, string> = {
+  admin: 'Administrador',
+  contador: 'Contador',
+  operario: 'Operario',
 }
 export type OrderStatus = 'pendiente' | 'en_proceso' | 'terminada' | 'pausada'
 export type EfficiencyStatus = 'green' | 'yellow' | 'red'
@@ -25,6 +33,9 @@ export interface Operator {
   position: string | null
   line: string | null
   hire_date: string | null
+  email: string | null
+  access_role: OperatorAccessRole
+  user_id: string | null
   active: boolean
   notes: string | null
   created_at: string
@@ -52,6 +63,7 @@ export interface GarmentReference {
   created_at: string
   updated_at: string
   clients?: Pick<Client, 'id' | 'name' | 'minute_rate'> | null
+  reference_operations?: Pick<ReferenceOperation, 'standard_minutes' | 'active'>[] | null
 }
 
 export interface ReferenceOperation {
@@ -211,4 +223,19 @@ export interface OperatorDailySummary {
   total_defective_units: number
   efficiency_percentage: number
   status: EfficiencyStatus
+}
+
+export interface OrderOperationProgress {
+  production_order_id: string
+  order_number: string
+  reference_id: string
+  status: OrderStatus
+  total_quantity: number
+  reference_operation_id: string
+  operation_number: number
+  operation_name: string
+  sort_order: number | null
+  delivered_units: number
+  remaining_units: number
+  over_delivered: boolean
 }

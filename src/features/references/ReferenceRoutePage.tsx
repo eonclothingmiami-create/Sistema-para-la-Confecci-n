@@ -10,6 +10,7 @@ import { Field, PrimaryButton, SecondaryButton, TextInput } from '../../componen
 import { Modal } from '../../components/ui/Modal'
 import { PageHeader } from '../../components/ui/PageHeader'
 import { DesktopOnly, RecordCard, RecordCardList, RecordField } from '../../components/ui/RecordCard'
+import { formatSam, samTotal } from '../../lib/efficiency'
 import { supabase } from '../../lib/supabase'
 import type { GarmentReference, ReferenceOperation } from '../../types/database'
 
@@ -88,6 +89,7 @@ export function ReferenceRoutePage() {
     },
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ['reference_operations', id] })
+      await queryClient.invalidateQueries({ queryKey: ['garment_references'] })
       setOpen(false)
       setEditing(null)
     },
@@ -100,11 +102,15 @@ export function ReferenceRoutePage() {
     },
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ['reference_operations', id] })
+      await queryClient.invalidateQueries({ queryKey: ['garment_references'] })
     },
   })
 
   const reference = referenceQuery.data
   const nextNumber = (operationsQuery.data?.length ?? 0) + 1
+  const activeOperations = operationsQuery.data?.filter((item) => item.active) ?? []
+  const garmentSam = samTotal(operationsQuery.data)
+  const inactiveCount = (operationsQuery.data?.length ?? 0) - activeOperations.length
 
   function startCreate() {
     setEditing(null)
@@ -139,6 +145,11 @@ export function ReferenceRoutePage() {
       </Link>
       <PageHeader
         title={reference ? `Ruta · ${reference.code} ${reference.name}` : 'Ruta operacional'}
+        description={
+          (operationsQuery.data?.length ?? 0) > 0
+            ? `SAM prenda · ${formatSam(garmentSam)} · ${activeOperations.length} proceso${activeOperations.length === 1 ? '' : 's'} activo${activeOperations.length === 1 ? '' : 's'}${inactiveCount > 0 ? ` · ${inactiveCount} inactivo${inactiveCount === 1 ? '' : 's'} no suman` : ''}`
+            : undefined
+        }
         actions={
           <PrimaryButton onClick={startCreate}>
             <Plus className="h-4 w-4" /> Agregar operación
@@ -179,10 +190,18 @@ export function ReferenceRoutePage() {
               }
             >
               <RecordField label="Máquina">{item.machine_type || '—'}</RecordField>
-              <RecordField label="Min / und">{Number(item.standard_minutes).toFixed(4)}</RecordField>
+              <RecordField label="SAM">{Number(item.standard_minutes).toFixed(4)}</RecordField>
             </RecordCard>
           ))}
         </RecordCardList>
+        <div className="rounded-2xl border border-zinc-200 bg-white px-4 py-3 sm:hidden">
+          <p className="text-xs font-medium text-zinc-500">SAM prenda</p>
+          <p className="mt-0.5 text-sm font-semibold tabular text-zinc-900">{formatSam(garmentSam)}</p>
+          <p className="mt-0.5 text-xs text-zinc-500">
+            Suma de {activeOperations.length} proceso{activeOperations.length === 1 ? '' : 's'} activo
+            {activeOperations.length === 1 ? '' : 's'}
+          </p>
+        </div>
         <DesktopOnly>
         <div className="overflow-x-auto rounded-xl border border-zinc-200 bg-white">
           <table className="min-w-full text-sm">
@@ -191,7 +210,7 @@ export function ReferenceRoutePage() {
                 <th className="px-3 py-2.5">Nº operación</th>
                 <th className="px-3 py-2.5">Proceso</th>
                 <th className="px-3 py-2.5">Máquina</th>
-                <th className="px-3 py-2.5">Min / und</th>
+                <th className="px-3 py-2.5">SAM</th>
                 <th className="px-3 py-2.5">Estado</th>
                 <th className="px-3 py-2.5" />
               </tr>
@@ -220,6 +239,18 @@ export function ReferenceRoutePage() {
                 </tr>
               ))}
             </tbody>
+            <tfoot>
+              <tr className="border-t border-zinc-200 bg-zinc-50">
+                <td className="px-3 py-2.5 text-xs font-semibold uppercase tracking-wide text-zinc-500" colSpan={3}>
+                  SAM prenda
+                </td>
+                <td className="px-3 py-2.5 tabular font-semibold text-zinc-900">{formatSam(garmentSam)}</td>
+                <td className="px-3 py-2.5 text-xs text-zinc-500" colSpan={2}>
+                  {activeOperations.length} activo{activeOperations.length === 1 ? '' : 's'}
+                  {inactiveCount > 0 ? ` · ${inactiveCount} no suman` : ''}
+                </td>
+              </tr>
+            </tfoot>
           </table>
         </div>
         </DesktopOnly>
@@ -255,7 +286,7 @@ export function ReferenceRoutePage() {
             <Field label="Máquina / tipo">
               <TextInput {...form.register('machine_type')} />
             </Field>
-            <Field label="Tiempo estándar (min/und)" error={form.formState.errors.standard_minutes?.message}>
+            <Field label="SAM (min/und)" error={form.formState.errors.standard_minutes?.message}>
               <TextInput
                 type="number"
                 step="0.0001"
