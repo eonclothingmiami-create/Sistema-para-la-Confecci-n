@@ -1,6 +1,7 @@
 # Suscripción — revisión y prueba (sin sorpresas en producción)
 
 Orden obligatorio. **No actives el candado** hasta validar cada fase.
+La app del cliente solo **lee** el estado; el panel global manda la decisión.
 
 ## Cómo aplicar SQL
 
@@ -13,118 +14,98 @@ Las migraciones se aplican **por SQL Editor** (copiar/pegar el archivo completo)
 
 | Fase | Archivo | Efecto en producción |
 |---|---|---|
-| 1 | `supabase/migrations/20261018010000_subscription_schema.sql` | Solo añade tablas/funciones + fila con `enforcement_enabled = false`. **Cero bloqueo.** |
-| 1b | `supabase/migrations/20261018020000_subscription_vendor_controls.sql` | RPCs vendor: `set_enforcement`, `suspend_subscription`, `reactivate_subscription`. |
-| 2 | Frontend (este repo) | Banner: avisos de **1 día / hoy** siempre por fecha. grace/expired solo con enforcement. Solo lectura en UI al vencer. Controles en `#/admin/suscripcion`. |
-| 3 | `supabase/migrations/20261018030000_subscription_write_policies.sql` | Políticas **RESTRICTIVE** nuevas (`*_sub_write_*`), idempotentes. No reemplaza políticas existentes. |
-| Seed | `supabase/seed_subscription.sql` | Vendor admin: reemplaza solo el marcador en la línea de `v_email` |
+| 1 | `supabase/migrations/20261018010000_subscription_schema.sql` | Tablas/funciones + fila `enforcement_enabled = false`. **Cero bloqueo.** |
+| 1b | `supabase/migrations/20261018020000_subscription_vendor_controls.sql` | RPCs locales: set_enforcement / suspend / reactivate. |
+| 2 | Frontend (este repo) | Banners + solo lectura UI + admin lazy. Fail-open si el RPC falla. |
+| 3 | `supabase/migrations/20261018030000_subscription_write_policies.sql` | Políticas **RESTRICTIVE** idempotentes. |
+| 4 | `supabase/migrations/20261018040000_subscription_remote_control.sql` | Columnas panel, `apply_vendor_state`, `set_grace`, eventos, estados efectivos. |
+| Edge | `supabase/functions/vendor-sync` | Ver `docs/vendor-sync.md`. |
+| Seed | `supabase/seed_subscription.sql` | Vendor admin (marcador en línea `v_email`). |
 
-## 1. Aplicar fase 1 (SQL Editor)
+## Orden exacto en producción
 
-Copia y ejecuta `20261018010000_subscription_schema.sql`.
+1. SQL Editor: `20261018010000_subscription_schema.sql` (si aún no está).
+2. SQL Editor: `20261018020000_subscription_vendor_controls.sql`.
+3. SQL Editor: `seed_subscription.sql` (email vendor).
+4. SQL Editor: `20261018040000_subscription_remote_control.sql` (modelo remoto; safe con enforcement false).
+5. Desplegar frontend de `feat/suscripcion` (gh-pages / Hostinger). El cliente no nota cambio con enforcement apagado.
+6. `supabase secrets set VENDOR_SYNC_SECRET=...`
+7. `supabase functions deploy vendor-sync --no-verify-jwt`
+8. Cuando cobres de verdad: SQL Editor `20261018030000_subscription_write_policies.sql`, luego `enforcement_enabled = true` (panel o local).
 
-```sql
-select public.subscription_state();
--- enforcement_enabled = false, status = active, current_period_end = 2026-11-06
-
-select public.subscription_is_active();
--- true
-```
-
-## 2. Controles vendor (después de fase 1)
-
-Ejecuta `20261018020000_subscription_vendor_controls.sql`.
-
-## 3. Registrar vendor admin
-
-1. Abre `supabase/seed_subscription.sql`
-2. En la línea de `v_email := '...'`, reemplaza solo ese marcador por el email real
-3. Ejecuta en SQL Editor
-
-## 4. Desplegar frontend (cuando apruebes)
-
-Con enforcement apagado:
-
-- Luis **sí** ve avisos el día 5 (vence mañana) y el día 6 (vence hoy)
-- grace/expired **no** bloquean ni muestran pantalla de bloqueo
-- toast «suscripción vencida» **solo** si `expired` + `enforcement_enabled=true`
-
-## 5. Probar estados de aviso (enforcement aún false)
+## SELECT de verificación (solo lectura / fail-open)
 
 ```sql
--- ACTIVE, varios días → sin banner
-update public.subscription
-set current_period_end = ((timezone('America/Bogota', now()))::date + 10),
-    status = 'active',
-    grace_days = 3,
-    enforcement_enabled = false;
+select
+  public.subscription_state() as state,
+  public.subscription_is_active() as is_active,
+  (select tenant_id from public.subscription where id = '00000000-0000-4000-8000-000000000001') as tenant_id,
+  (select source from public.subscription where id = '00000000-0000-4000-8000-000000000001') as source,
+  (select panel_version from public.subscription where id = '00000000-0000-4000-8000-000000000001') as panel_version,
+  (select enforcement_enabled from public.subscription where id = '00000000-0000-4000-8000-000000000001') as enforcement_enabled;
 
--- Vence mañana (days_left = 1) → banner ámbar SIEMPRE
-update public.subscription
-set current_period_end = ((timezone('America/Bogota', now()))::date + 1);
-
--- Vence hoy (days_left = 0) → banner rojo SIEMPRE
-update public.subscription
-set current_period_end = (timezone('America/Bogota', now()))::date;
-
--- Grace / expired con enforcement false → sin banner de bloqueo
-update public.subscription
-set current_period_end = ((timezone('America/Bogota', now()))::date - 1);
+-- Esperado en producción segura:
+-- state.effective_status in ('active','due_soon') según fecha
+-- is_active = true
+-- enforcement_enabled = false
 ```
 
-## 6. Aplicar fase 3 (candado RLS) — solo cuando apruebes
-
-Ejecuta `20261018030000_subscription_write_policies.sql`.
-
-Con `enforcement_enabled = false` la escritura **sigue permitida**.
-
-Para probar solo lectura de verdad:
+Forzar solo lectura (sin borrar data) — solo en prueba:
 
 ```sql
 update public.subscription
 set enforcement_enabled = true,
-    current_period_end = ((timezone('America/Bogota', now()))::date - 5),
-    status = 'active',
-    grace_days = 3;
-```
+    status = 'suspended',
+    source = 'local';
 
-- Banner rojo fijo (no tapa la app)
-- Botones guardar/editar/borrar deshabilitados
-- Si algo intenta escribir: toast «La suscripción está vencida…»
-- SELECT sigue OK
+select public.subscription_state() ->> 'effective_status'; -- suspended
+select public.subscription_is_active();                   -- false
 
-## 7. Volver a producción segura
-
-```sql
+-- Volver a seguro:
 update public.subscription
-set current_period_end = '2026-11-06',
+set enforcement_enabled = false,
     status = 'active',
-    grace_days = 3,
-    enforcement_enabled = false;
+    grace_until = null,
+    message = null,
+    current_period_end = '2026-11-06';
 ```
 
-Cuando cobres de verdad:
+## 1. Aplicar fase 1 (SQL Editor)
 
 ```sql
-update public.subscription set enforcement_enabled = true;
+select public.subscription_state();
+select public.subscription_is_active();
 ```
 
-## 8. Registrar pago / controles (vendor)
+## 2. Controles vendor (1b)
 
-En `#/admin/suscripcion`: interruptor de bloqueo, **Suspender ahora** (confirmación) y **Reactivar**
-(`set_enforcement` / `suspend_subscription` / `reactivate_subscription`), más registrar pago.
+Ejecuta `20261018020000_subscription_vendor_controls.sql`.
 
-O con JWT de vendor:
+## 3. Seed vendor admin
 
-```sql
-select public.register_payment(
-  ((timezone('America/Bogota', now()))::date + 30),
-  150000,
-  'transferencia',
-  'PRUEBA-001'
-);
+Reemplaza solo el marcador en la línea `v_email` de `seed_subscription.sql`.
 
-select public.set_enforcement(true);
-select public.suspend_subscription();
-select public.reactivate_subscription();
-```
+## 4. Fase 4 — control remoto
+
+Ejecuta `20261018040000_subscription_remote_control.sql`.
+
+## 5. Frontend
+
+Con enforcement apagado:
+
+- Luis ve avisos el día 5 (vence mañana) y el día 6 (vence hoy)
+- grace/suspended/expired **no** bloquean
+- toast de escritura denegada solo con suspended/expired + enforcement
+- `#/admin/suscripcion` solo vendor admin (chunk lazy)
+
+## 6. Edge function
+
+Ver `docs/vendor-sync.md`.
+
+## 7. Fase 3 (candado RLS) — solo cuando apruebes
+
+Ejecuta `20261018030000_subscription_write_policies.sql`.
+
+## 8. Controles de emergencia
+
+En `#/admin/suscripcion` (vendor): origen Panel/Local, sincronización, gracia, suspender, reactivar, eventos.

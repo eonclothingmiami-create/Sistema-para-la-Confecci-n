@@ -1,3 +1,4 @@
+import { lazy, Suspense } from 'react'
 import { HashRouter, Navigate, Route, Routes } from 'react-router-dom'
 import { AppShell } from './components/layout/AppShell'
 import { LoginPage } from './features/auth/LoginPage'
@@ -13,7 +14,12 @@ import { ReferenceRoutePage } from './features/references/ReferenceRoutePage'
 import { ReferencesPage } from './features/references/ReferencesPage'
 import { ReportsPage } from './features/reports/ReportsPage'
 import { ResultadoPage } from './features/result/ResultadoPage'
-import { SubscriptionAdminPage } from './features/subscription/SubscriptionAdminPage'
+
+const SubscriptionAdminPage = lazy(() =>
+  import('./features/subscription/SubscriptionAdminPage').then((m) => ({
+    default: m.SubscriptionAdminPage,
+  })),
+)
 
 export default function App() {
   return (
@@ -40,7 +46,14 @@ export default function App() {
           <Route path="ordenes" element={<OrdersPage />} />
           <Route path="reportes" element={<ReportsPage />} />
           <Route path="resultado" element={<ResultadoPage />} />
-          <Route path="admin/suscripcion" element={<SubscriptionAdminPage />} />
+          <Route
+            path="admin/suscripcion"
+            element={
+              <Suspense fallback={<div className="py-16 text-center text-sm text-zinc-500">Cargando…</div>}>
+                <SubscriptionAdminPage />
+              </Suspense>
+            }
+          />
         </Route>
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>

@@ -2,6 +2,7 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Navigate } from 'react-router-dom'
 import { useForm } from 'react-hook-form'
+import { useState } from 'react'
 import { z } from 'zod'
 import { Field, PrimaryButton, SecondaryButton, TextInput } from '../../components/ui/FormField'
 import { PageHeader } from '../../components/ui/PageHeader'
@@ -20,15 +21,39 @@ const schema = z.object({
 
 type FormValues = z.infer<typeof schema>
 
+type SubscriptionEventRow = {
+  id: string
+  at: string
+  source: string
+  actor: string | null
+  old_state: Record<string, unknown> | null
+  new_state: Record<string, unknown> | null
+}
+
 async function invalidateSubscription(queryClient: ReturnType<typeof useQueryClient>) {
   await queryClient.invalidateQueries({ queryKey: ['subscription_state'] })
   await queryClient.invalidateQueries({ queryKey: ['subscription_payments'] })
+  await queryClient.invalidateQueries({ queryKey: ['subscription_events'] })
+}
+
+function formatSyncAt(iso: string | null | undefined): string {
+  if (!iso) return 'Nunca'
+  try {
+    return new Intl.DateTimeFormat('es-CO', {
+      dateStyle: 'medium',
+      timeStyle: 'short',
+      timeZone: 'America/Bogota',
+    }).format(new Date(iso))
+  } catch {
+    return iso
+  }
 }
 
 export function SubscriptionAdminPage() {
   const vendorQuery = useIsVendorAdmin()
   const subscriptionQuery = useSubscription()
   const queryClient = useQueryClient()
+  const [graceUntil, setGraceUntil] = useState('')
 
   const paymentsQuery = useQuery({
     queryKey: ['subscription_payments'],
@@ -41,6 +66,20 @@ export function SubscriptionAdminPage() {
         .order('created_at', { ascending: false })
       if (error) throw error
       return data as SubscriptionPayment[]
+    },
+  })
+
+  const eventsQuery = useQuery({
+    queryKey: ['subscription_events'],
+    enabled: vendorQuery.data === true,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('subscription_events')
+        .select('id, at, source, actor, old_state, new_state')
+        .order('at', { ascending: false })
+        .limit(40)
+      if (error) throw error
+      return data as SubscriptionEventRow[]
     },
   })
 
@@ -105,6 +144,17 @@ export function SubscriptionAdminPage() {
     },
   })
 
+  const setGrace = useMutation({
+    mutationFn: async (until: string) => {
+      const { error } = await supabase.rpc('set_grace', { p_until: until })
+      if (error) throw error
+    },
+    onSuccess: async () => {
+      await invalidateSubscription(queryClient)
+      setGraceUntil('')
+    },
+  })
+
   if (vendorQuery.isLoading) {
     return <div className="py-16 text-center text-sm text-zinc-500">Cargando…</div>
   }
@@ -116,7 +166,9 @@ export function SubscriptionAdminPage() {
   const state = subscriptionQuery.data
   const enforcementOn = state?.enforcement_enabled === true
   const storedSuspended = state?.stored_status === 'suspended'
-  const controlsBusy = setEnforcement.isPending || suspend.isPending || reactivate.isPending
+  const controlsBusy =
+    setEnforcement.isPending || suspend.isPending || reactivate.isPending || setGrace.isPending
+  const originLabel = state?.source === 'panel' ? 'Panel global' : 'Local'
 
   return (
     <div className="space-y-8">
@@ -126,16 +178,30 @@ export function SubscriptionAdminPage() {
         <h2 className="text-sm font-semibold text-zinc-900">Estado actual</h2>
         <dl className="mt-3 grid gap-3 text-sm sm:grid-cols-2">
           <div>
+            <dt className="text-zinc-500">Origen</dt>
+            <dd className="font-medium text-zinc-900">{originLabel}</dd>
+          </div>
+          <div>
+            <dt className="text-zinc-500">Última sincronización</dt>
+            <dd className="font-medium text-zinc-900">{formatSyncAt(state?.last_synced_at)}</dd>
+          </div>
+          <div>
             <dt className="text-zinc-500">Estado efectivo</dt>
-            <dd className="font-medium text-zinc-900">{state?.status ?? '—'}</dd>
+            <dd className="font-medium text-zinc-900">
+              {state?.effective_status ?? state?.status ?? '—'}
+            </dd>
           </div>
           <div>
             <dt className="text-zinc-500">Estado guardado</dt>
             <dd className="font-medium text-zinc-900">{state?.stored_status ?? '—'}</dd>
           </div>
           <div>
-            <dt className="text-zinc-500">Plan</dt>
-            <dd className="font-medium text-zinc-900">{state?.plan ?? '—'}</dd>
+            <dt className="text-zinc-500">tenant_id</dt>
+            <dd className="font-medium text-zinc-900">{state?.tenant_id ?? '—'}</dd>
+          </div>
+          <div>
+            <dt className="text-zinc-500">panel_version</dt>
+            <dd className="font-medium text-zinc-900">{state?.panel_version ?? 0}</dd>
           </div>
           <div>
             <dt className="text-zinc-500">Vence</dt>
@@ -144,26 +210,38 @@ export function SubscriptionAdminPage() {
             </dd>
           </div>
           <div>
+            <dt className="text-zinc-500">Gracia hasta</dt>
+            <dd className="font-medium text-zinc-900">
+              {formatSubscriptionDateLong(state?.grace_until)}
+            </dd>
+          </div>
+          <div>
             <dt className="text-zinc-500">Días restantes</dt>
             <dd className="font-medium text-zinc-900">{state?.days_left ?? '—'}</dd>
           </div>
           <div>
-            <dt className="text-zinc-500">Días de gracia restantes</dt>
-            <dd className="font-medium text-zinc-900">{state?.grace_days_left ?? '—'}</dd>
+            <dt className="text-zinc-500">Días de gracia</dt>
+            <dd className="font-medium text-zinc-900">
+              {state?.days_left_in_grace ?? state?.grace_days_left ?? '—'}
+            </dd>
           </div>
           <div>
             <dt className="text-zinc-500">Enforcement</dt>
             <dd className="font-medium text-zinc-900">
-              {enforcementOn ? 'Activo (bloquea escritura vencida)' : 'Apagado (fail-open)'}
+              {enforcementOn ? 'Activo (bloquea escritura)' : 'Apagado (fail-open)'}
             </dd>
+          </div>
+          <div className="sm:col-span-2">
+            <dt className="text-zinc-500">Mensaje</dt>
+            <dd className="font-medium text-zinc-900">{state?.message?.trim() || '—'}</dd>
           </div>
         </dl>
       </section>
 
       <section className="rounded-2xl border border-zinc-200 bg-white p-4 sm:p-5">
-        <h2 className="text-sm font-semibold text-zinc-900">Controles del proveedor</h2>
+        <h2 className="text-sm font-semibold text-zinc-900">Controles de emergencia</h2>
         <p className="mt-1 text-sm text-zinc-500">
-          El interruptor activa el candado RLS/UI. Suspender fuerza estado expired aunque la fecha sea futura.
+          Respaldo local si el panel global no está disponible. Marca source = local.
         </p>
 
         <label className="mt-4 flex items-center gap-3 text-sm text-zinc-800">
@@ -177,6 +255,23 @@ export function SubscriptionAdminPage() {
           Bloqueo activo (enforcement)
         </label>
 
+        <div className="mt-4 flex flex-wrap items-end gap-2">
+          <Field label="Poner en gracia hasta…">
+            <TextInput
+              type="date"
+              value={graceUntil}
+              onChange={(event) => setGraceUntil(event.target.value)}
+            />
+          </Field>
+          <SecondaryButton
+            type="button"
+            disabled={controlsBusy || !graceUntil}
+            onClick={() => setGrace.mutate(graceUntil)}
+          >
+            {setGrace.isPending ? 'Aplicando…' : 'Aplicar gracia'}
+          </SecondaryButton>
+        </div>
+
         <div className="mt-4 flex flex-wrap gap-2">
           <SecondaryButton
             type="button"
@@ -184,7 +279,7 @@ export function SubscriptionAdminPage() {
             onClick={() => {
               if (
                 confirm(
-                  '¿Suspender ahora? La app quedará como vencida (solo lectura si el bloqueo está activo).',
+                  '¿Suspender ahora? La app quedará en solo lectura si el bloqueo está activo.',
                 )
               ) {
                 suspend.mutate()
@@ -195,17 +290,29 @@ export function SubscriptionAdminPage() {
           </SecondaryButton>
           <PrimaryButton
             type="button"
-            disabled={controlsBusy || (!storedSuspended && state?.status !== 'expired')}
+            disabled={
+              controlsBusy ||
+              (!storedSuspended &&
+                state?.status !== 'expired' &&
+                state?.status !== 'suspended' &&
+                state?.status !== 'grace')
+            }
             onClick={() => reactivate.mutate()}
           >
             {reactivate.isPending ? 'Reactivando…' : 'Reactivar'}
           </PrimaryButton>
         </div>
 
-        {setEnforcement.isError || suspend.isError || reactivate.isError ? (
+        {setEnforcement.isError || suspend.isError || reactivate.isError || setGrace.isError ? (
           <p className="mt-3 text-sm text-rose-600">
-            {(setEnforcement.error || suspend.error || reactivate.error) instanceof Error
-              ? ((setEnforcement.error || suspend.error || reactivate.error) as Error).message
+            {(setEnforcement.error || suspend.error || reactivate.error || setGrace.error) instanceof
+            Error
+              ? (
+                  (setEnforcement.error ||
+                    suspend.error ||
+                    reactivate.error ||
+                    setGrace.error) as Error
+                ).message
               : 'No se pudo aplicar el control'}
           </p>
         ) : null}
@@ -248,6 +355,44 @@ export function SubscriptionAdminPage() {
             ) : null}
           </div>
         </form>
+      </section>
+
+      <section className="rounded-2xl border border-zinc-200 bg-white p-4 sm:p-5">
+        <h2 className="text-sm font-semibold text-zinc-900">Historial de eventos</h2>
+        {eventsQuery.isLoading ? (
+          <p className="mt-3 text-sm text-zinc-500">Cargando eventos…</p>
+        ) : eventsQuery.data?.length ? (
+          <div className="mt-3 overflow-x-auto">
+            <table className="min-w-full text-left text-sm">
+              <thead className="text-xs tracking-wide text-zinc-500 uppercase">
+                <tr>
+                  <th className="px-2 py-2">Cuándo</th>
+                  <th className="px-2 py-2">Origen</th>
+                  <th className="px-2 py-2">Actor</th>
+                  <th className="px-2 py-2">Cambio</th>
+                </tr>
+              </thead>
+              <tbody>
+                {eventsQuery.data.map((row) => {
+                  const oldStatus = row.old_state?.status
+                  const newStatus = row.new_state?.status
+                  return (
+                    <tr key={row.id} className="border-t border-zinc-100">
+                      <td className="px-2 py-2 whitespace-nowrap">{formatSyncAt(row.at)}</td>
+                      <td className="px-2 py-2">{row.source}</td>
+                      <td className="px-2 py-2">{row.actor ?? '—'}</td>
+                      <td className="px-2 py-2">
+                        {String(oldStatus ?? '—')} → {String(newStatus ?? '—')}
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <p className="mt-3 text-sm text-zinc-500">Aún no hay eventos.</p>
+        )}
       </section>
 
       <section className="rounded-2xl border border-zinc-200 bg-white p-4 sm:p-5">

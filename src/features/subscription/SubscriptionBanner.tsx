@@ -47,40 +47,76 @@ export function SubscriptionBanner() {
   if (!notice) return null
   if (notice.dismissible && dismissed) return null
 
-  // Avisos de 1/0 día y grace: solo admin. Expired: todos (mensaje distinto).
-  if (notice.kind !== 'expired' && !admin) return null
+  // due_soon: solo admin del taller. grace/suspended/expired: todos (texto según rol).
+  if (notice.kind === 'due_tomorrow' || notice.kind === 'due_today') {
+    if (!admin) return null
+  }
 
   const toneClass =
     notice.tone === 'amber'
       ? 'border-amber-300 bg-amber-50 text-amber-950'
       : 'border-rose-300 bg-rose-50 text-rose-950'
 
-  if (notice.kind === 'expired') {
+  if (notice.kind === 'grace' && !admin) {
+    return (
+      <div className={`mb-4 rounded-xl border px-4 py-3 text-sm ${toneClass}`}>
+        <p className="leading-relaxed">
+          Hay un aviso de suscripción pendiente. Contacta a tu administrador.
+        </p>
+      </div>
+    )
+  }
+
+  if (notice.kind === 'expired' || notice.kind === 'suspended') {
     return (
       <div className={`mb-4 rounded-xl border px-4 py-3 text-sm ${toneClass}`}>
         {admin ? (
           <>
             <p className="font-medium leading-relaxed">{notice.message}</p>
             <p className="mt-2 leading-relaxed">
-              La app está en solo lectura. Para renovar escribe a{' '}
+              Para renovar escribe a{' '}
               <a className="font-medium underline" href={`mailto:${VENDOR_CONTACT.email}`}>
                 {VENDOR_CONTACT.email}
               </a>
               . {VENDOR_CONTACT.note}
             </p>
+            {notice.vendorMessage ? (
+              <p className="mt-2 leading-relaxed opacity-90">{notice.vendorMessage}</p>
+            ) : null}
           </>
         ) : (
-          <p className="leading-relaxed">
-            El sistema está temporalmente en solo lectura, contacta a tu administrador.
-          </p>
+          <>
+            <p className="leading-relaxed">
+              El sistema está temporalmente en solo lectura, contacta a tu administrador.
+            </p>
+            {notice.vendorMessage ? (
+              <p className="mt-2 leading-relaxed opacity-90">{notice.vendorMessage}</p>
+            ) : null}
+          </>
         )}
+      </div>
+    )
+  }
+
+  if (notice.kind === 'grace') {
+    return (
+      <div className={`mb-4 rounded-xl border px-4 py-3 text-sm ${toneClass}`}>
+        <p className="font-medium leading-relaxed">{notice.message}</p>
+        {notice.vendorMessage ? (
+          <p className="mt-2 leading-relaxed opacity-90">{notice.vendorMessage}</p>
+        ) : null}
       </div>
     )
   }
 
   return (
     <div className={`mb-4 flex items-start gap-3 rounded-xl border px-4 py-3 text-sm ${toneClass}`}>
-      <p className="min-w-0 flex-1 leading-relaxed">{notice.message}</p>
+      <div className="min-w-0 flex-1">
+        <p className="leading-relaxed">{notice.message}</p>
+        {notice.vendorMessage ? (
+          <p className="mt-2 leading-relaxed opacity-90">{notice.vendorMessage}</p>
+        ) : null}
+      </div>
       {notice.dismissible ? (
         <button
           type="button"

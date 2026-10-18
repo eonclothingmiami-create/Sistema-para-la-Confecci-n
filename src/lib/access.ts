@@ -96,9 +96,10 @@ export function navModulesForRole(
     },
   ]
 
+  // Enlace solo para vendor admin; sin título que mencione el rol interno.
   if (options?.isVendorAdmin) {
     modules.push({
-      title: 'Proveedor',
+      title: null,
       links: [{ to: '/admin/suscripcion', label: 'Suscripción' }],
     })
   }

@@ -9,7 +9,13 @@ import { showToast } from './toast'
 function notifySubscriptionWriteDenied(error: unknown) {
   if (!isSubscriptionWriteDenied(error)) return
   const state = queryClient.getQueryData<SubscriptionState | null>(['subscription_state'])
-  if (state?.enforcement_enabled === true && state.status === 'expired') {
+  const locked =
+    state?.enforcement_enabled === true &&
+    (state.status === 'expired' ||
+      state.status === 'suspended' ||
+      state.effective_status === 'expired' ||
+      state.effective_status === 'suspended')
+  if (locked) {
     showToast(SUBSCRIPTION_WRITE_DENIED_MESSAGE)
   }
 }
