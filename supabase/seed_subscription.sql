@@ -1,19 +1,21 @@
 -- Semilla vendor admin (SQL Editor, bypass RLS).
--- 1) Reemplaza <<EMAIL_PROVEEDOR>> por el correo real del vendor.
+-- 1) En la línea del marcador, reemplaza <<EMAIL_PROVEEDOR>> por el correo real.
 -- 2) Ejecuta el script completo.
 -- La fila de subscription ya se inserta en 20261018010000_subscription_schema.sql.
 
 do $$
 declare
   v_email text := '<<EMAIL_PROVEEDOR>>';
+  -- Constante distinta al marcador: un "reemplazar todo" del marcador no la pisa.
+  v_unset_marker constant text := chr(60) || chr(60) || 'EMAIL_PROVEEDOR' || chr(62) || chr(62);
   v_user_id uuid;
 begin
   if v_email is null
      or btrim(v_email) = ''
-     or v_email = '<<EMAIL_PROVEEDOR>>'
+     or v_email = v_unset_marker
      or position('@' in v_email) = 0 then
     raise exception
-      'Reemplaza <<EMAIL_PROVEEDOR>> por el email del vendor antes de ejecutar este seed';
+      'Reemplaza el marcador EMAIL_PROVEEDOR (linea del assign de v_email) por el email del vendor antes de ejecutar este seed';
   end if;
 
   select u.id into v_user_id

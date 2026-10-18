@@ -21,7 +21,7 @@ import {
   hoursFromCapacity,
   todayISO,
 } from '../../lib/efficiency'
-import { queryClient } from '../../lib/query-client'
+import { notifySubscriptionMutationError, queryClient } from '../../lib/query-client'
 import { supabase } from '../../lib/supabase'
 import type {
   DailyOperatorEfficiency,
@@ -323,7 +323,8 @@ export function ProductionPage() {
       setMessage('Producción guardada.')
       await queryClient.invalidateQueries()
     },
-    onError: () => {
+    onError: (error) => {
+      notifySubscriptionMutationError(error)
       setMessage('No se pudo guardar. Revisa que exista ruta operacional.')
     },
   })
@@ -344,7 +345,8 @@ export function ProductionPage() {
       }
       await queryClient.invalidateQueries()
     },
-    onError: () => {
+    onError: (error) => {
+      notifySubscriptionMutationError(error)
       setMessage('No se pudo borrar la captura.')
     },
   })

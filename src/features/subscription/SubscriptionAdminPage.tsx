@@ -3,7 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Navigate } from 'react-router-dom'
 import { useForm } from 'react-hook-form'
 import { z } from 'zod'
-import { Field, PrimaryButton, TextInput } from '../../components/ui/FormField'
+import { Field, PrimaryButton, SecondaryButton, TextInput } from '../../components/ui/FormField'
 import { PageHeader } from '../../components/ui/PageHeader'
 import { useIsVendorAdmin, useSubscription } from '../../hooks/useSubscription'
 import { formatMoney } from '../../lib/money'
@@ -19,6 +19,11 @@ const schema = z.object({
 })
 
 type FormValues = z.infer<typeof schema>
+
+async function invalidateSubscription(queryClient: ReturnType<typeof useQueryClient>) {
+  await queryClient.invalidateQueries({ queryKey: ['subscription_state'] })
+  await queryClient.invalidateQueries({ queryKey: ['subscription_payments'] })
+}
 
 export function SubscriptionAdminPage() {
   const vendorQuery = useIsVendorAdmin()
@@ -60,14 +65,43 @@ export function SubscriptionAdminPage() {
       if (error) throw error
     },
     onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: ['subscription_state'] })
-      await queryClient.invalidateQueries({ queryKey: ['subscription_payments'] })
+      await invalidateSubscription(queryClient)
       form.reset({
         period_end: '',
         amount: 0,
         method: 'transferencia',
         reference: '',
       })
+    },
+  })
+
+  const setEnforcement = useMutation({
+    mutationFn: async (enabled: boolean) => {
+      const { error } = await supabase.rpc('set_enforcement', { p_enabled: enabled })
+      if (error) throw error
+    },
+    onSuccess: async () => {
+      await invalidateSubscription(queryClient)
+    },
+  })
+
+  const suspend = useMutation({
+    mutationFn: async () => {
+      const { error } = await supabase.rpc('suspend_subscription')
+      if (error) throw error
+    },
+    onSuccess: async () => {
+      await invalidateSubscription(queryClient)
+    },
+  })
+
+  const reactivate = useMutation({
+    mutationFn: async () => {
+      const { error } = await supabase.rpc('reactivate_subscription')
+      if (error) throw error
+    },
+    onSuccess: async () => {
+      await invalidateSubscription(queryClient)
     },
   })
 
@@ -80,6 +114,9 @@ export function SubscriptionAdminPage() {
   }
 
   const state = subscriptionQuery.data
+  const enforcementOn = state?.enforcement_enabled === true
+  const storedSuspended = state?.stored_status === 'suspended'
+  const controlsBusy = setEnforcement.isPending || suspend.isPending || reactivate.isPending
 
   return (
     <div className="space-y-8">
@@ -91,6 +128,10 @@ export function SubscriptionAdminPage() {
           <div>
             <dt className="text-zinc-500">Estado efectivo</dt>
             <dd className="font-medium text-zinc-900">{state?.status ?? '—'}</dd>
+          </div>
+          <div>
+            <dt className="text-zinc-500">Estado guardado</dt>
+            <dd className="font-medium text-zinc-900">{state?.stored_status ?? '—'}</dd>
           </div>
           <div>
             <dt className="text-zinc-500">Plan</dt>
@@ -113,10 +154,61 @@ export function SubscriptionAdminPage() {
           <div>
             <dt className="text-zinc-500">Enforcement</dt>
             <dd className="font-medium text-zinc-900">
-              {state?.enforcement_enabled ? 'Activo (bloquea escritura vencida)' : 'Apagado (fail-open)'}
+              {enforcementOn ? 'Activo (bloquea escritura vencida)' : 'Apagado (fail-open)'}
             </dd>
           </div>
         </dl>
+      </section>
+
+      <section className="rounded-2xl border border-zinc-200 bg-white p-4 sm:p-5">
+        <h2 className="text-sm font-semibold text-zinc-900">Controles del proveedor</h2>
+        <p className="mt-1 text-sm text-zinc-500">
+          El interruptor activa el candado RLS/UI. Suspender fuerza estado expired aunque la fecha sea futura.
+        </p>
+
+        <label className="mt-4 flex items-center gap-3 text-sm text-zinc-800">
+          <input
+            type="checkbox"
+            className="h-4 w-4 rounded border-zinc-300"
+            checked={enforcementOn}
+            disabled={controlsBusy || !state}
+            onChange={(event) => setEnforcement.mutate(event.target.checked)}
+          />
+          Bloqueo activo (enforcement)
+        </label>
+
+        <div className="mt-4 flex flex-wrap gap-2">
+          <SecondaryButton
+            type="button"
+            disabled={controlsBusy || storedSuspended}
+            onClick={() => {
+              if (
+                confirm(
+                  '¿Suspender ahora? La app quedará como vencida (solo lectura si el bloqueo está activo).',
+                )
+              ) {
+                suspend.mutate()
+              }
+            }}
+          >
+            {suspend.isPending ? 'Suspendiendo…' : 'Suspender ahora'}
+          </SecondaryButton>
+          <PrimaryButton
+            type="button"
+            disabled={controlsBusy || (!storedSuspended && state?.status !== 'expired')}
+            onClick={() => reactivate.mutate()}
+          >
+            {reactivate.isPending ? 'Reactivando…' : 'Reactivar'}
+          </PrimaryButton>
+        </div>
+
+        {setEnforcement.isError || suspend.isError || reactivate.isError ? (
+          <p className="mt-3 text-sm text-rose-600">
+            {(setEnforcement.error || suspend.error || reactivate.error) instanceof Error
+              ? ((setEnforcement.error || suspend.error || reactivate.error) as Error).message
+              : 'No se pudo aplicar el control'}
+          </p>
+        ) : null}
       </section>
 
       <section className="rounded-2xl border border-zinc-200 bg-white p-4 sm:p-5">

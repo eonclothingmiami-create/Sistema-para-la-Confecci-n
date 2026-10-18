@@ -11,6 +11,7 @@ import { PageHeader } from '../../components/ui/PageHeader'
 import { DesktopOnly, RecordCard, RecordCardList, RecordField } from '../../components/ui/RecordCard'
 import { useSubscriptionReadOnly } from '../../hooks/useSubscription'
 import { formatMinuteRate } from '../../lib/money'
+import { notifySubscriptionMutationError } from '../../lib/query-client'
 import { supabase } from '../../lib/supabase'
 import type { Client } from '../../types/database'
 
@@ -101,6 +102,7 @@ export function ClientsPage() {
       await queryClient.invalidateQueries({ queryKey: ['clients'] })
     },
     onError: (error) => {
+      notifySubscriptionMutationError(error)
       setDeleteError(clientDeleteErrorMessage(error))
     },
   })
