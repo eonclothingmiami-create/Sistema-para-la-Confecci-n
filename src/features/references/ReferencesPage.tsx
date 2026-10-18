@@ -17,6 +17,7 @@ import {
 import { Modal } from '../../components/ui/Modal'
 import { PageHeader } from '../../components/ui/PageHeader'
 import { DesktopOnly, RecordCard, RecordCardList, RecordField } from '../../components/ui/RecordCard'
+import { useSubscriptionReadOnly } from '../../hooks/useSubscription'
 import { formatSam, samTotal } from '../../lib/efficiency'
 import { formatMinuteRate } from '../../lib/money'
 import { supabase } from '../../lib/supabase'
@@ -44,6 +45,7 @@ const emptyValues: FormValues = {
 
 export function ReferencesPage() {
   const queryClient = useQueryClient()
+  const readOnly = useSubscriptionReadOnly()
   const [open, setOpen] = useState(false)
   const [editing, setEditing] = useState<GarmentReference | null>(null)
 
@@ -140,7 +142,7 @@ export function ReferencesPage() {
       <PageHeader
         title="Referencias / prendas"
         actions={
-          <PrimaryButton onClick={startCreate}>
+          <PrimaryButton onClick={startCreate} disabled={readOnly}>
             <Plus className="h-4 w-4" /> Nueva referencia
           </PrimaryButton>
         }
@@ -151,7 +153,11 @@ export function ReferencesPage() {
         <EmptyState
           title="Sin referencias"
           description="Crea una prenda, asígnala a un cliente y luego define su ruta de operaciones."
-          action={<PrimaryButton onClick={startCreate}>Crear referencia</PrimaryButton>}
+          action={
+            <PrimaryButton onClick={startCreate} disabled={readOnly}>
+              Crear referencia
+            </PrimaryButton>
+          }
         />
       ) : null}
 
@@ -179,11 +185,16 @@ export function ReferencesPage() {
                   >
                     <FileText className="h-4 w-4" />
                   </Link>
-                  <button className="text-zinc-500 hover:text-zinc-900" onClick={() => startEdit(item)}>
+                  <button
+                    className="text-zinc-500 hover:text-zinc-900 disabled:cursor-not-allowed disabled:opacity-40"
+                    disabled={readOnly}
+                    onClick={() => startEdit(item)}
+                  >
                     <Pencil className="h-4 w-4" />
                   </button>
                   <button
-                    className="text-rose-500 hover:text-rose-700"
+                    className="text-rose-500 hover:text-rose-700 disabled:cursor-not-allowed disabled:opacity-40"
+                    disabled={readOnly}
                     onClick={() => {
                       if (confirm('¿Eliminar esta referencia y su ruta?')) void remove.mutate(item.id)
                     }}
@@ -246,11 +257,16 @@ export function ReferencesPage() {
                     >
                       <FileText className="h-4 w-4" />
                     </Link>
-                    <button className="mr-2 text-zinc-500 hover:text-zinc-900" onClick={() => startEdit(item)}>
+                    <button
+                      className="mr-2 text-zinc-500 hover:text-zinc-900 disabled:cursor-not-allowed disabled:opacity-40"
+                      disabled={readOnly}
+                      onClick={() => startEdit(item)}
+                    >
                       <Pencil className="h-4 w-4" />
                     </button>
                     <button
-                      className="text-rose-500 hover:text-rose-700"
+                      className="text-rose-500 hover:text-rose-700 disabled:cursor-not-allowed disabled:opacity-40"
+                      disabled={readOnly}
                       onClick={() => {
                         if (confirm('¿Eliminar esta referencia y su ruta?')) void remove.mutate(item.id)
                       }}
@@ -317,7 +333,7 @@ export function ReferencesPage() {
               <SecondaryButton type="button" onClick={() => setOpen(false)}>
                 Cancelar
               </SecondaryButton>
-              <PrimaryButton disabled={save.isPending}>Guardar</PrimaryButton>
+              <PrimaryButton disabled={save.isPending || readOnly}>Guardar</PrimaryButton>
             </div>
           </form>
         </Modal>

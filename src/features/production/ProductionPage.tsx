@@ -8,6 +8,7 @@ import { PageHeader } from '../../components/ui/PageHeader'
 import { DesktopOnly, RecordCard, RecordCardList, RecordField } from '../../components/ui/RecordCard'
 import { StatusBadge } from '../../components/ui/StatusBadge'
 import { useAuth } from '../../hooks/useAuth'
+import { useSubscriptionReadOnly } from '../../hooks/useSubscription'
 import { isShopFloorRole } from '../../lib/access'
 import {
   DEFAULT_CAPACITY,
@@ -20,7 +21,7 @@ import {
   hoursFromCapacity,
   todayISO,
 } from '../../lib/efficiency'
-import { queryClient } from '../../lib/query-client'
+import { notifySubscriptionMutationError, queryClient } from '../../lib/query-client'
 import { supabase } from '../../lib/supabase'
 import type {
   DailyOperatorEfficiency,
@@ -67,6 +68,7 @@ function captureLabel(item: DayCapture) {
 
 export function ProductionPage() {
   const { profile, linkedOperator, loadingLinkedOperator, loadingProfile } = useAuth()
+  const readOnly = useSubscriptionReadOnly()
   const shopFloor = isShopFloorRole(profile?.role)
   const [date, setDate] = useState(todayISO())
   const [operatorId, setOperatorId] = useState('')
@@ -321,7 +323,8 @@ export function ProductionPage() {
       setMessage('Producción guardada.')
       await queryClient.invalidateQueries()
     },
-    onError: () => {
+    onError: (error) => {
+      notifySubscriptionMutationError(error)
       setMessage('No se pudo guardar. Revisa que exista ruta operacional.')
     },
   })
@@ -342,7 +345,8 @@ export function ProductionPage() {
       }
       await queryClient.invalidateQueries()
     },
-    onError: () => {
+    onError: (error) => {
+      notifySubscriptionMutationError(error)
       setMessage('No se pudo borrar la captura.')
     },
   })
@@ -514,8 +518,9 @@ export function ProductionPage() {
                   </button>
                   <button
                     type="button"
-                    className="inline-flex min-h-11 min-w-11 shrink-0 items-center justify-center self-center pr-3 text-rose-500 hover:text-rose-700"
+                    className="inline-flex min-h-11 min-w-11 shrink-0 items-center justify-center self-center pr-3 text-rose-500 hover:text-rose-700 disabled:cursor-not-allowed disabled:opacity-40"
                     title="Borrar captura"
+                    disabled={readOnly}
                     onClick={() => setPendingDelete(item)}
                   >
                     <Trash2 className="h-4 w-4" />
@@ -575,7 +580,7 @@ export function ProductionPage() {
               </SelectInput>
             </Field>
           </div>
-          <SecondaryButton type="button" disabled={!addOperationId} onClick={addOperationRow}>
+          <SecondaryButton type="button" disabled={readOnly || !addOperationId} onClick={addOperationRow}>
             <Plus className="h-4 w-4" /> Agregar al cuadro
           </SecondaryButton>
         </div>
@@ -598,7 +603,8 @@ export function ProductionPage() {
                 actions={
                   <button
                     type="button"
-                    className="inline-flex min-h-11 min-w-11 items-center justify-center text-rose-500 hover:text-rose-700"
+                    className="inline-flex min-h-11 min-w-11 items-center justify-center text-rose-500 hover:text-rose-700 disabled:cursor-not-allowed disabled:opacity-40"
+                    disabled={readOnly}
                     onClick={() => removeOperationRow(draft.reference_operation_id)}
                     title="Quitar del cuadro"
                   >
@@ -718,7 +724,8 @@ export function ProductionPage() {
                     <td className="px-3 py-2">
                       <button
                         type="button"
-                        className="inline-flex min-h-11 min-w-11 items-center justify-center text-rose-500 hover:text-rose-700"
+                        className="inline-flex min-h-11 min-w-11 items-center justify-center text-rose-500 hover:text-rose-700 disabled:cursor-not-allowed disabled:opacity-40"
+                        disabled={readOnly}
                         onClick={() => removeOperationRow(draft.reference_operation_id)}
                         title="Quitar del cuadro"
                       >
@@ -742,7 +749,7 @@ export function ProductionPage() {
       <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
         <PrimaryButton
           className="min-h-11 w-full sm:w-auto"
-          disabled={!operatorId || !orderId || drafts.length === 0 || save.isPending}
+          disabled={readOnly || !operatorId || !orderId || drafts.length === 0 || save.isPending}
           onClick={() => {
             setMessage(null)
             void save.mutate()
@@ -753,7 +760,8 @@ export function ProductionPage() {
         {loadedHeader ? (
           <button
             type="button"
-            className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-lg border border-rose-200 bg-white px-3.5 py-2 text-sm font-medium text-rose-600 hover:bg-rose-50 sm:w-auto"
+            className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-lg border border-rose-200 bg-white px-3.5 py-2 text-sm font-medium text-rose-600 hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-40 sm:w-auto"
+            disabled={readOnly}
             onClick={() => {
               const fromList = dayCapturesQuery.data?.find((item) => item.id === loadedHeader.id)
               setPendingDelete(
@@ -806,7 +814,7 @@ export function ProductionPage() {
             <button
               type="button"
               className="inline-flex min-h-11 w-full items-center justify-center rounded-lg bg-rose-600 px-3.5 py-2 text-sm font-medium text-white hover:bg-rose-700 disabled:opacity-50 sm:w-auto"
-              disabled={removeCapture.isPending}
+              disabled={readOnly || removeCapture.isPending}
               onClick={() => void removeCapture.mutate(pendingDelete.id)}
             >
               {removeCapture.isPending ? 'Eliminando…' : 'Eliminar'}

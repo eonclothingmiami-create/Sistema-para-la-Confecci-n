@@ -239,3 +239,15 @@ export interface OrderOperationProgress {
   remaining_units: number
   over_delivered: boolean
 }
+
+export interface SubscriptionPayment {
+  id: string
+  paid_at: string
+  amount: number
+  method: string | null
+  reference: string | null
+  period_start: string | null
+  period_end: string
+  created_by: string | null
+  created_at: string
+}

@@ -15,9 +15,13 @@ import {
 import { useState } from 'react'
 import { NavLink, Outlet } from 'react-router-dom'
 import { InstallBanner } from '../ui/InstallBanner'
+import { ToastHost } from '../ui/ToastHost'
 import { RequireRole } from '../../features/auth/RequireRole'
+import { SubscriptionBanner } from '../../features/subscription/SubscriptionBanner'
+import { SubscriptionExpiredGate } from '../../features/subscription/SubscriptionExpired'
 import { useInstallPrompt } from '../../hooks/useInstallPrompt'
 import { useAuth } from '../../hooks/useAuth'
+import { useIsVendorAdmin } from '../../hooks/useSubscription'
 import { useRealtimeInvalidation } from '../../hooks/useRealtimeInvalidation'
 import { navModulesForRole } from '../../lib/access'
 import { supabase } from '../../lib/supabase'
@@ -33,13 +37,15 @@ const navIcons = {
   '/resultado': Wallet,
   '/reportes': Scissors,
   '/mi': User,
+  '/admin/suscripcion': Wallet,
 } as const
 
 export function AppShell() {
   const { user, profile } = useAuth()
   const [open, setOpen] = useState(false)
   const install = useInstallPrompt()
-  const modules = navModulesForRole(profile?.role)
+  const vendorQuery = useIsVendorAdmin()
+  const modules = navModulesForRole(profile?.role, { isVendorAdmin: vendorQuery.data === true })
   useRealtimeInvalidation()
 
   async function signOut() {
@@ -138,11 +144,15 @@ export function AppShell() {
           </div>
         </header>
         <main className={`min-w-0 p-4 sm:p-6 ${install.visible ? 'pb-36' : ''}`}>
+          <SubscriptionBanner />
           <RequireRole>
-            <Outlet />
+            <SubscriptionExpiredGate>
+              <Outlet />
+            </SubscriptionExpiredGate>
           </RequireRole>
         </main>
         <InstallBanner prompt={install} />
+        <ToastHost />
       </div>
     </div>
   )

@@ -17,6 +17,7 @@ import { formatMoney } from '../../lib/money'
 import { sumAmounts, workingDaysInMonth } from '../../lib/result'
 import { supabase } from '../../lib/supabase'
 import type { CostEntry, ProductionOrder } from '../../types/database'
+import { useSubscriptionReadOnly } from '../../hooks/useSubscription'
 import { useWorkshopCalendar } from '../../hooks/useWorkshopCalendar'
 import { CalendarPanel } from './CalendarPanel'
 
@@ -56,6 +57,7 @@ export function ResultadoPage() {
 
 function FixedCostsPanel() {
   const queryClient = useQueryClient()
+  const readOnly = useSubscriptionReadOnly()
   const [month, setMonth] = useState(todayISO().slice(0, 7))
   const occurredOn = startOfMonthISO(`${month}-01`)
   const calendarQuery = useWorkshopCalendar(occurredOn, endOfMonthISO(occurredOn))
@@ -229,12 +231,12 @@ function FixedCostsPanel() {
               )
               createCategory.mutate(name)
             }}
-            disabled={createCategory.isPending}
+            disabled={readOnly || createCategory.isPending}
           >
             <Plus className="h-4 w-4" />
             Agregar categoría
           </SecondaryButton>
-          <PrimaryButton type="button" onClick={() => save.mutate()} disabled={save.isPending}>
+          <PrimaryButton type="button" onClick={() => save.mutate()} disabled={readOnly || save.isPending}>
             {save.isPending ? 'Guardando…' : 'Guardar fijos'}
           </PrimaryButton>
         </div>
@@ -266,8 +268,9 @@ function FixedCostsPanel() {
                 row.categoryId ? (
                   <button
                     type="button"
-                    className="text-rose-500 hover:text-rose-700"
+                    className="text-rose-500 hover:text-rose-700 disabled:cursor-not-allowed disabled:opacity-40"
                     title="Quitar categoría"
+                    disabled={readOnly}
                     onClick={() => {
                       if (
                         confirm(
@@ -353,8 +356,9 @@ function FixedCostsPanel() {
                     {row.categoryId ? (
                       <button
                         type="button"
-                        className="text-rose-500 hover:text-rose-700"
+                        className="text-rose-500 hover:text-rose-700 disabled:cursor-not-allowed disabled:opacity-40"
                         title="Quitar categoría"
+                        disabled={readOnly}
                         onClick={() => {
                           if (
                             confirm(
@@ -402,6 +406,7 @@ function FixedCostsPanel() {
 
 function VariableCostsPanel() {
   const queryClient = useQueryClient()
+  const readOnly = useSubscriptionReadOnly()
   const [date, setDate] = useState(todayISO())
   const [category, setCategory] = useState('')
   const [otherName, setOtherName] = useState('')
@@ -540,7 +545,7 @@ function VariableCostsPanel() {
           </Field>
         </div>
         <div className="flex items-end">
-          <PrimaryButton disabled={save.isPending}>
+          <PrimaryButton disabled={readOnly || save.isPending}>
             <Plus className="h-4 w-4" />
             {save.isPending ? 'Guardando…' : 'Agregar gasto'}
           </PrimaryButton>
@@ -574,7 +579,8 @@ function VariableCostsPanel() {
                   <span className="tabular text-sm font-medium text-zinc-800">{formatMoney(item.amount)}</span>
                   <button
                     type="button"
-                    className="text-rose-500 hover:text-rose-700"
+                    className="text-rose-500 hover:text-rose-700 disabled:cursor-not-allowed disabled:opacity-40"
+                    disabled={readOnly}
                     onClick={() => {
                       if (confirm('¿Eliminar este gasto?')) void remove.mutate(item.id)
                     }}

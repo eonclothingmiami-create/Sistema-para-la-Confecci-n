@@ -33,8 +33,15 @@ function pathMatches(pathname: string, base: string): boolean {
   return pathname === base || pathname.startsWith(`${base}/`)
 }
 
-export function canAccessPath(role: UserRole | null | undefined, pathname: string): boolean {
+export function canAccessPath(
+  role: UserRole | null | undefined,
+  pathname: string,
+  options?: { isVendorAdmin?: boolean },
+): boolean {
   if (!role) return false
+  if (pathMatches(pathname, '/admin/suscripcion')) {
+    return options?.isVendorAdmin === true
+  }
   if (isStaffRole(role)) return true
 
   if (role === 'contador') {
@@ -44,19 +51,21 @@ export function canAccessPath(role: UserRole | null | undefined, pathname: strin
   return pathMatches(pathname, '/produccion') || pathMatches(pathname, '/mi')
 }
 
-export function navModulesForRole(role: UserRole | null | undefined): NavModuleDef[] {
+export function navModulesForRole(
+  role: UserRole | null | undefined,
+  options?: { isVendorAdmin?: boolean },
+): NavModuleDef[] {
   if (!role) return []
 
   if (isShopFloorRole(role)) {
-    return [
-      {
-        title: null,
-        links: [
-          { to: '/produccion', label: 'Producción' },
-          { to: '/mi', label: 'Mi rendimiento' },
-        ],
-      },
+    const links: NavLinkDef[] = [
+      { to: '/produccion', label: 'Producción' },
+      { to: '/mi', label: 'Mi rendimiento' },
     ]
+    if (options?.isVendorAdmin) {
+      links.push({ to: '/admin/suscripcion', label: 'Suscripción' })
+    }
+    return [{ title: null, links }]
   }
 
   const floorLinks: NavLinkDef[] =
@@ -68,7 +77,7 @@ export function navModulesForRole(role: UserRole | null | undefined): NavModuleD
           { to: '/referencias', label: 'Referencias' },
         ]
 
-  return [
+  const modules: NavModuleDef[] = [
     {
       title: 'Operatividad',
       links: [
@@ -86,4 +95,14 @@ export function navModulesForRole(role: UserRole | null | undefined): NavModuleD
       ],
     },
   ]
+
+  // Enlace solo para vendor admin; sin título que mencione el rol interno.
+  if (options?.isVendorAdmin) {
+    modules.push({
+      title: null,
+      links: [{ to: '/admin/suscripcion', label: 'Suscripción' }],
+    })
+  }
+
+  return modules
 }

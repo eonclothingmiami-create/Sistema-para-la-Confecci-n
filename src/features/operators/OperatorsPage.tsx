@@ -11,6 +11,7 @@ import { Modal } from '../../components/ui/Modal'
 import { PageHeader } from '../../components/ui/PageHeader'
 import { DesktopOnly, RecordCard, RecordCardList, RecordField } from '../../components/ui/RecordCard'
 import { useAuth } from '../../hooks/useAuth'
+import { useSubscriptionReadOnly } from '../../hooks/useSubscription'
 import { isStaffRole } from '../../lib/access'
 import { supabase } from '../../lib/supabase'
 import { ACCESS_ROLE_LABELS, type Operator, type OperatorAccessRole } from '../../types/database'
@@ -64,6 +65,7 @@ function operatorSaveError(error: unknown) {
 export function OperatorsPage() {
   const queryClient = useQueryClient()
   const { profile } = useAuth()
+  const readOnly = useSubscriptionReadOnly()
   const canManageIdentity = isStaffRole(profile?.role)
   const [open, setOpen] = useState(false)
   const [editing, setEditing] = useState<Operator | null>(null)
@@ -151,7 +153,7 @@ export function OperatorsPage() {
       <PageHeader
         title="Operarios"
         actions={
-          <PrimaryButton onClick={startCreate}>
+          <PrimaryButton onClick={startCreate} disabled={readOnly}>
             <Plus className="h-4 w-4" /> Nuevo operario
           </PrimaryButton>
         }
@@ -164,7 +166,11 @@ export function OperatorsPage() {
         <EmptyState
           title="Sin operarios"
           description="Crea el primer operario para comenzar a registrar producción."
-          action={<PrimaryButton onClick={startCreate}>Crear operario</PrimaryButton>}
+          action={
+            <PrimaryButton onClick={startCreate} disabled={readOnly}>
+              Crear operario
+            </PrimaryButton>
+          }
         />
       ) : null}
 
@@ -185,11 +191,16 @@ export function OperatorsPage() {
                   <Link to={`/operarios/${operator.id}`} className="text-zinc-600 hover:text-zinc-900" title="Ver ficha">
                     <IdCard className="h-4 w-4" />
                   </Link>
-                  <button className="text-zinc-500 hover:text-zinc-900" onClick={() => startEdit(operator)}>
+                  <button
+                    className="text-zinc-500 hover:text-zinc-900 disabled:cursor-not-allowed disabled:opacity-40"
+                    disabled={readOnly}
+                    onClick={() => startEdit(operator)}
+                  >
                     <Pencil className="h-4 w-4" />
                   </button>
                   <button
-                    className="text-rose-500 hover:text-rose-700"
+                    className="text-rose-500 hover:text-rose-700 disabled:cursor-not-allowed disabled:opacity-40"
+                    disabled={readOnly}
                     onClick={() => {
                       if (confirm('¿Eliminar este operario?')) void remove.mutate(operator.id)
                     }}
@@ -248,11 +259,16 @@ export function OperatorsPage() {
                     >
                       <IdCard className="h-4 w-4" />
                     </Link>
-                    <button className="mr-2 text-zinc-500 hover:text-zinc-900" onClick={() => startEdit(operator)}>
+                    <button
+                      className="mr-2 text-zinc-500 hover:text-zinc-900 disabled:cursor-not-allowed disabled:opacity-40"
+                      disabled={readOnly}
+                      onClick={() => startEdit(operator)}
+                    >
                       <Pencil className="h-4 w-4" />
                     </button>
                     <button
-                      className="text-rose-500 hover:text-rose-700"
+                      className="text-rose-500 hover:text-rose-700 disabled:cursor-not-allowed disabled:opacity-40"
+                      disabled={readOnly}
                       onClick={() => {
                         if (confirm('¿Eliminar este operario?')) void remove.mutate(operator.id)
                       }}
@@ -331,7 +347,9 @@ export function OperatorsPage() {
               <SecondaryButton type="button" onClick={() => setOpen(false)}>
                 Cancelar
               </SecondaryButton>
-              <PrimaryButton disabled={save.isPending}>{save.isPending ? 'Guardando…' : 'Guardar'}</PrimaryButton>
+              <PrimaryButton disabled={save.isPending || readOnly}>
+                {save.isPending ? 'Guardando…' : 'Guardar'}
+              </PrimaryButton>
             </div>
           </form>
         </Modal>
