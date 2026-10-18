@@ -52,10 +52,10 @@ export function SubscriptionAdminPage() {
   const save = useMutation({
     mutationFn: async (values: FormValues) => {
       const { error } = await supabase.rpc('register_payment', {
-        period_end: values.period_end,
-        amount: values.amount,
-        method: values.method || null,
-        reference: values.reference || null,
+        p_period_end: values.period_end,
+        p_amount: values.amount,
+        p_method: values.method || null,
+        p_reference: values.reference || null,
       })
       if (error) throw error
     },

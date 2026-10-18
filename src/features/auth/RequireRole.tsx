@@ -13,6 +13,12 @@ export function RequireRole({ children }: { children: ReactNode }) {
     return <div className="py-16 text-center text-sm text-zinc-500">Cargando…</div>
   }
 
+  const onVendorRoute = location.pathname.startsWith('/admin/suscripcion')
+  // No redirigir la ruta de vendor mientras aún carga is_vendor_admin.
+  if (onVendorRoute && vendorQuery.isLoading) {
+    return <div className="py-16 text-center text-sm text-zinc-500">Cargando…</div>
+  }
+
   if (
     !canAccessPath(profile.role, location.pathname, {
       isVendorAdmin: vendorQuery.data === true,

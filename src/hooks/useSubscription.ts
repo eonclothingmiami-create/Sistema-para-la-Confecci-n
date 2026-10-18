@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query'
-import type { SubscriptionState } from '../lib/subscription'
+import { isSubscriptionReadOnly, type SubscriptionState } from '../lib/subscription'
 import { supabase } from '../lib/supabase'
 
 function parseSubscriptionState(data: unknown): SubscriptionState {
@@ -53,4 +53,10 @@ export function useIsVendorAdmin() {
     refetchOnWindowFocus: true,
     retry: false,
   })
+}
+
+/** true cuando enforcement está activo y la suscripción está expired. */
+export function useSubscriptionReadOnly(): boolean {
+  const { data } = useSubscription()
+  return isSubscriptionReadOnly(data)
 }

@@ -16,6 +16,7 @@ import {
 import { Modal } from '../../components/ui/Modal'
 import { PageHeader } from '../../components/ui/PageHeader'
 import { DesktopOnly, RecordCard, RecordCardList, RecordField } from '../../components/ui/RecordCard'
+import { useSubscriptionReadOnly } from '../../hooks/useSubscription'
 import { formatMinuteRate } from '../../lib/money'
 import { supabase } from '../../lib/supabase'
 import type { GarmentReference, OrderStatus, ProductionOrder, ReferenceOperation } from '../../types/database'
@@ -50,6 +51,7 @@ function orderSaveErrorMessage(error: unknown): string {
 
 export function OrdersPage() {
   const queryClient = useQueryClient()
+  const readOnly = useSubscriptionReadOnly()
   const [open, setOpen] = useState(false)
   const [editing, setEditing] = useState<ProductionOrder | null>(null)
 
@@ -195,7 +197,7 @@ export function OrdersPage() {
       <PageHeader
         title="Órdenes / lotes"
         actions={
-          <PrimaryButton onClick={startCreate}>
+          <PrimaryButton onClick={startCreate} disabled={readOnly}>
             <Plus className="h-4 w-4" /> Nueva orden
           </PrimaryButton>
         }
@@ -205,7 +207,11 @@ export function OrdersPage() {
         <EmptyState
           title="Sin órdenes"
           description="Crea un lote para poder capturar producción diaria."
-          action={<PrimaryButton onClick={startCreate}>Crear orden</PrimaryButton>}
+          action={
+            <PrimaryButton onClick={startCreate} disabled={readOnly}>
+              Crear orden
+            </PrimaryButton>
+          }
         />
       ) : null}
 
@@ -219,11 +225,16 @@ export function OrdersPage() {
               subtitle={statusLabel[item.status]}
               actions={
                 <>
-                  <button className="text-zinc-500 hover:text-zinc-900" onClick={() => startEdit(item)}>
+                  <button
+                    className="text-zinc-500 hover:text-zinc-900 disabled:cursor-not-allowed disabled:opacity-40"
+                    disabled={readOnly}
+                    onClick={() => startEdit(item)}
+                  >
                     <Pencil className="h-4 w-4" />
                   </button>
                   <button
-                    className="text-rose-500 hover:text-rose-700"
+                    className="text-rose-500 hover:text-rose-700 disabled:cursor-not-allowed disabled:opacity-40"
+                    disabled={readOnly}
                     onClick={() => {
                       if (confirm('¿Eliminar esta orden?')) void remove.mutate(item.id)
                     }}
@@ -275,11 +286,16 @@ export function OrdersPage() {
                   <td className="px-3 py-2.5 text-zinc-600">{item.estimated_end_date || '—'}</td>
                   <td className="px-3 py-2.5">{statusLabel[item.status]}</td>
                   <td className="px-3 py-2.5 text-right">
-                    <button className="mr-2 text-zinc-500 hover:text-zinc-900" onClick={() => startEdit(item)}>
+                    <button
+                      className="mr-2 text-zinc-500 hover:text-zinc-900 disabled:cursor-not-allowed disabled:opacity-40"
+                      disabled={readOnly}
+                      onClick={() => startEdit(item)}
+                    >
                       <Pencil className="h-4 w-4" />
                     </button>
                     <button
-                      className="text-rose-500 hover:text-rose-700"
+                      className="text-rose-500 hover:text-rose-700 disabled:cursor-not-allowed disabled:opacity-40"
+                      disabled={readOnly}
                       onClick={() => {
                         if (confirm('¿Eliminar esta orden?')) void remove.mutate(item.id)
                       }}
@@ -389,7 +405,7 @@ export function OrdersPage() {
               <SecondaryButton type="button" onClick={() => setOpen(false)}>
                 Cancelar
               </SecondaryButton>
-              <PrimaryButton disabled={save.isPending}>Guardar</PrimaryButton>
+              <PrimaryButton disabled={save.isPending || readOnly}>Guardar</PrimaryButton>
             </div>
           </form>
         </Modal>

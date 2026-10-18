@@ -5,6 +5,7 @@ import { useSubscription } from '../../hooks/useSubscription'
 import {
   dismissNoticeStorageKey,
   getSubscriptionNotice,
+  VENDOR_CONTACT,
   type SubscriptionNoticeKind,
 } from '../../lib/subscription'
 
@@ -33,6 +34,7 @@ export function SubscriptionBanner() {
   const { data } = useSubscription()
   const notice = useMemo(() => getSubscriptionNotice(data), [data])
   const [dismissed, setDismissed] = useState(false)
+  const admin = isAppAdmin(profile?.role)
 
   useEffect(() => {
     if (!notice || !notice.dismissible) {
@@ -42,14 +44,39 @@ export function SubscriptionBanner() {
     setDismissed(readDismissed(notice.kind, data?.current_period_end ?? null))
   }, [notice, data?.current_period_end])
 
-  if (!isAppAdmin(profile?.role) || !notice) return null
-  if (notice.kind === 'expired') return null
+  if (!notice) return null
   if (notice.dismissible && dismissed) return null
+
+  // Avisos de 1/0 día y grace: solo admin. Expired: todos (mensaje distinto).
+  if (notice.kind !== 'expired' && !admin) return null
 
   const toneClass =
     notice.tone === 'amber'
       ? 'border-amber-300 bg-amber-50 text-amber-950'
       : 'border-rose-300 bg-rose-50 text-rose-950'
+
+  if (notice.kind === 'expired') {
+    return (
+      <div className={`mb-4 rounded-xl border px-4 py-3 text-sm ${toneClass}`}>
+        {admin ? (
+          <>
+            <p className="font-medium leading-relaxed">{notice.message}</p>
+            <p className="mt-2 leading-relaxed">
+              La app está en solo lectura. Para renovar escribe a{' '}
+              <a className="font-medium underline" href={`mailto:${VENDOR_CONTACT.email}`}>
+                {VENDOR_CONTACT.email}
+              </a>
+              . {VENDOR_CONTACT.note}
+            </p>
+          </>
+        ) : (
+          <p className="leading-relaxed">
+            El sistema está temporalmente en solo lectura, contacta a tu administrador.
+          </p>
+        )}
+      </div>
+    )
+  }
 
   return (
     <div className={`mb-4 flex items-start gap-3 rounded-xl border px-4 py-3 text-sm ${toneClass}`}>

@@ -10,6 +10,7 @@ import { Field, PrimaryButton, SecondaryButton, TextInput } from '../../componen
 import { Modal } from '../../components/ui/Modal'
 import { PageHeader } from '../../components/ui/PageHeader'
 import { DesktopOnly, RecordCard, RecordCardList, RecordField } from '../../components/ui/RecordCard'
+import { useSubscriptionReadOnly } from '../../hooks/useSubscription'
 import { formatSam, samTotal } from '../../lib/efficiency'
 import { supabase } from '../../lib/supabase'
 import type { GarmentReference, ReferenceOperation } from '../../types/database'
@@ -28,6 +29,7 @@ type FormValues = z.infer<typeof schema>
 export function ReferenceRoutePage() {
   const { id } = useParams<{ id: string }>()
   const queryClient = useQueryClient()
+  const readOnly = useSubscriptionReadOnly()
   const [open, setOpen] = useState(false)
   const [editing, setEditing] = useState<ReferenceOperation | null>(null)
 
@@ -151,7 +153,7 @@ export function ReferenceRoutePage() {
             : undefined
         }
         actions={
-          <PrimaryButton onClick={startCreate}>
+          <PrimaryButton onClick={startCreate} disabled={readOnly}>
             <Plus className="h-4 w-4" /> Agregar operación
           </PrimaryButton>
         }
@@ -161,7 +163,11 @@ export function ReferenceRoutePage() {
         <EmptyState
           title="Sin operaciones"
           description="Define la ruta de esta prenda para poder registrar producción."
-          action={<PrimaryButton onClick={startCreate}>Agregar operación</PrimaryButton>}
+          action={
+            <PrimaryButton onClick={startCreate} disabled={readOnly}>
+              Agregar operación
+            </PrimaryButton>
+          }
         />
       ) : null}
 
@@ -175,11 +181,16 @@ export function ReferenceRoutePage() {
               subtitle={item.active ? 'Activa' : 'Inactiva'}
               actions={
                 <>
-                  <button className="text-zinc-500 hover:text-zinc-900" onClick={() => startEdit(item)}>
+                  <button
+                    className="text-zinc-500 hover:text-zinc-900 disabled:cursor-not-allowed disabled:opacity-40"
+                    disabled={readOnly}
+                    onClick={() => startEdit(item)}
+                  >
                     <Pencil className="h-4 w-4" />
                   </button>
                   <button
-                    className="text-rose-500 hover:text-rose-700"
+                    className="text-rose-500 hover:text-rose-700 disabled:cursor-not-allowed disabled:opacity-40"
+                    disabled={readOnly}
                     onClick={() => {
                       if (confirm('¿Eliminar esta operación?')) void remove.mutate(item.id)
                     }}
@@ -224,11 +235,16 @@ export function ReferenceRoutePage() {
                   <td className="px-3 py-2.5 tabular">{Number(item.standard_minutes).toFixed(4)}</td>
                   <td className="px-3 py-2.5">{item.active ? 'Activa' : 'Inactiva'}</td>
                   <td className="px-3 py-2.5 text-right">
-                    <button className="mr-2 text-zinc-500 hover:text-zinc-900" onClick={() => startEdit(item)}>
+                    <button
+                      className="mr-2 text-zinc-500 hover:text-zinc-900 disabled:cursor-not-allowed disabled:opacity-40"
+                      disabled={readOnly}
+                      onClick={() => startEdit(item)}
+                    >
                       <Pencil className="h-4 w-4" />
                     </button>
                     <button
-                      className="text-rose-500 hover:text-rose-700"
+                      className="text-rose-500 hover:text-rose-700 disabled:cursor-not-allowed disabled:opacity-40"
+                      disabled={readOnly}
                       onClick={() => {
                         if (confirm('¿Eliminar esta operación?')) void remove.mutate(item.id)
                       }}
@@ -302,7 +318,7 @@ export function ReferenceRoutePage() {
               <SecondaryButton type="button" onClick={() => setOpen(false)}>
                 Cancelar
               </SecondaryButton>
-              <PrimaryButton disabled={save.isPending}>Guardar</PrimaryButton>
+              <PrimaryButton disabled={save.isPending || readOnly}>Guardar</PrimaryButton>
             </div>
           </form>
         </Modal>

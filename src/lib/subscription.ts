@@ -8,7 +8,7 @@ export type SubscriptionState = {
   days_left: number
   grace_days: number
   grace_days_left: number
-  /** Si es false, no hay avisos ni bloqueo de UI (fail-open en producción). */
+  /** Si es false, grace/expired no bloquean UI; avisos de 1/0 día sí se muestran. */
   enforcement_enabled?: boolean
 }
 
@@ -47,12 +47,17 @@ export function todayBogotaISO(now: Date = new Date()): string {
   }).format(now)
 }
 
+/**
+ * Avisos due_tomorrow / due_today: según fecha siempre (aunque enforcement esté apagado).
+ * grace / expired: solo con enforcement_enabled === true.
+ */
 export function getSubscriptionNotice(state: SubscriptionState | null | undefined): SubscriptionNotice | null {
   if (!state) return null
-  // Fail-open: sin enforcement no se muestra nada al cliente.
-  if (state.enforcement_enabled !== true) return null
+
+  const enforcementOn = state.enforcement_enabled === true
 
   if (state.status === 'expired') {
+    if (!enforcementOn) return null
     return {
       kind: 'expired',
       tone: 'red',
@@ -64,6 +69,7 @@ export function getSubscriptionNotice(state: SubscriptionState | null | undefine
   }
 
   if (state.status === 'grace') {
+    if (!enforcementOn) return null
     const n = Math.max(0, state.grace_days_left)
     return {
       kind: 'grace',
@@ -73,7 +79,7 @@ export function getSubscriptionNotice(state: SubscriptionState | null | undefine
     }
   }
 
-  // active
+  // active — avisos de vencimiento próximos siempre por fecha
   if (state.days_left === 1) {
     return {
       kind: 'due_tomorrow',
@@ -93,6 +99,11 @@ export function getSubscriptionNotice(state: SubscriptionState | null | undefine
   }
 
   return null
+}
+
+/** Solo lectura de UI cuando enforcement está activo y el estado efectivo es expired. */
+export function isSubscriptionReadOnly(state: SubscriptionState | null | undefined): boolean {
+  return state?.enforcement_enabled === true && state.status === 'expired'
 }
 
 export function isSubscriptionWriteDenied(error: unknown): boolean {

@@ -1,9 +1,36 @@
--- Semilla opcional / vendor admin.
--- La fila de subscription YA se inserta en 20241018010000_subscription_schema.sql
--- (current_period_end = 2026-11-06, enforcement_enabled = false).
--- Ejecutar esto en el SQL Editor (bypass RLS) para registrarte como vendor.
+-- Semilla vendor admin (SQL Editor, bypass RLS).
+-- 1) Reemplaza <<EMAIL_PROVEEDOR>> por el correo real del vendor.
+-- 2) Ejecuta el script completo.
+-- La fila de subscription ya se inserta en 20261018010000_subscription_schema.sql.
 
--- Asegura la fila (idempotente)
+do $$
+declare
+  v_email text := '<<EMAIL_PROVEEDOR>>';
+  v_user_id uuid;
+begin
+  if v_email is null
+     or btrim(v_email) = ''
+     or v_email = '<<EMAIL_PROVEEDOR>>'
+     or position('@' in v_email) = 0 then
+    raise exception
+      'Reemplaza <<EMAIL_PROVEEDOR>> por el email del vendor antes de ejecutar este seed';
+  end if;
+
+  select u.id into v_user_id
+  from auth.users u
+  where lower(u.email) = lower(btrim(v_email))
+  limit 1;
+
+  if v_user_id is null then
+    raise exception 'No existe usuario en auth.users con email %', v_email;
+  end if;
+
+  insert into public.vendor_admins (user_id)
+  values (v_user_id)
+  on conflict (user_id) do nothing;
+end $$;
+
+-- Asegura la fila de suscripción (idempotente; no enciende enforcement)
 insert into public.subscription (
   id,
   plan,
@@ -26,13 +53,6 @@ on conflict (id) do update
 set
   current_period_end = coalesce(public.subscription.current_period_end, excluded.current_period_end),
   updated_at = now();
-
--- Vendor admin: reemplaza el email si hace falta
-insert into public.vendor_admins (user_id)
-select u.id
-from auth.users u
-where lower(u.email) = lower('davidkaseo@hotmail.com')
-on conflict (user_id) do nothing;
 
 -- Verificación
 select

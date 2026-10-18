@@ -9,6 +9,7 @@ import { Field, PrimaryButton, SecondaryButton, TextArea, TextInput } from '../.
 import { Modal } from '../../components/ui/Modal'
 import { PageHeader } from '../../components/ui/PageHeader'
 import { DesktopOnly, RecordCard, RecordCardList, RecordField } from '../../components/ui/RecordCard'
+import { useSubscriptionReadOnly } from '../../hooks/useSubscription'
 import { formatMinuteRate } from '../../lib/money'
 import { supabase } from '../../lib/supabase'
 import type { Client } from '../../types/database'
@@ -47,6 +48,7 @@ function clientDeleteErrorMessage(error: unknown): string {
 
 export function ClientsPage() {
   const queryClient = useQueryClient()
+  const readOnly = useSubscriptionReadOnly()
   const [open, setOpen] = useState(false)
   const [editing, setEditing] = useState<Client | null>(null)
   const [deleteError, setDeleteError] = useState<string | null>(null)
@@ -125,7 +127,7 @@ export function ClientsPage() {
       <PageHeader
         title="Clientes"
         actions={
-          <PrimaryButton onClick={startCreate}>
+          <PrimaryButton onClick={startCreate} disabled={readOnly}>
             <Plus className="h-4 w-4" /> Nuevo cliente
           </PrimaryButton>
         }
@@ -139,7 +141,11 @@ export function ClientsPage() {
         <EmptyState
           title="Sin clientes"
           description="Crea el primer cliente y define su valor minuto antes de asignarlo a las referencias."
-          action={<PrimaryButton onClick={startCreate}>Crear cliente</PrimaryButton>}
+          action={
+            <PrimaryButton onClick={startCreate} disabled={readOnly}>
+              Crear cliente
+            </PrimaryButton>
+          }
         />
       ) : null}
 
@@ -153,11 +159,16 @@ export function ClientsPage() {
               subtitle={client.active ? 'Activo' : 'Inactivo'}
               actions={
                 <>
-                  <button className="text-zinc-500 hover:text-zinc-900" onClick={() => startEdit(client)}>
+                  <button
+                    className="text-zinc-500 hover:text-zinc-900 disabled:cursor-not-allowed disabled:opacity-40"
+                    disabled={readOnly}
+                    onClick={() => startEdit(client)}
+                  >
                     <Pencil className="h-4 w-4" />
                   </button>
                   <button
-                    className="text-rose-500 hover:text-rose-700"
+                    className="text-rose-500 hover:text-rose-700 disabled:cursor-not-allowed disabled:opacity-40"
+                    disabled={readOnly}
                     onClick={() => {
                       if (confirm('¿Eliminar este cliente?')) void remove.mutate(client.id)
                     }}
@@ -196,11 +207,16 @@ export function ClientsPage() {
                   </td>
                   <td className="max-w-xs truncate px-3 py-2.5 text-zinc-600">{client.notes || '—'}</td>
                   <td className="px-3 py-2.5 text-right">
-                    <button className="mr-2 text-zinc-500 hover:text-zinc-900" onClick={() => startEdit(client)}>
+                    <button
+                      className="mr-2 text-zinc-500 hover:text-zinc-900 disabled:cursor-not-allowed disabled:opacity-40"
+                      disabled={readOnly}
+                      onClick={() => startEdit(client)}
+                    >
                       <Pencil className="h-4 w-4" />
                     </button>
                     <button
-                      className="text-rose-500 hover:text-rose-700"
+                      className="text-rose-500 hover:text-rose-700 disabled:cursor-not-allowed disabled:opacity-40"
+                      disabled={readOnly}
                       onClick={() => {
                         if (confirm('¿Eliminar este cliente?')) void remove.mutate(client.id)
                       }}
@@ -252,7 +268,9 @@ export function ClientsPage() {
               <SecondaryButton type="button" onClick={() => setOpen(false)}>
                 Cancelar
               </SecondaryButton>
-              <PrimaryButton disabled={save.isPending}>{save.isPending ? 'Guardando…' : 'Guardar'}</PrimaryButton>
+              <PrimaryButton disabled={save.isPending || readOnly}>
+                {save.isPending ? 'Guardando…' : 'Guardar'}
+              </PrimaryButton>
             </div>
           </form>
         </Modal>

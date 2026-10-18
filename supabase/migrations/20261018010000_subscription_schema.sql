@@ -1,7 +1,8 @@
 -- Fase 1 (solo aditiva): membresía / suscripción.
 -- NO toca tablas ni políticas de negocio existentes.
 -- enforcement_enabled = false → fail-open: la app sigue escribiendo con normalidad.
--- Revisar y aplicar MANUALMENTE. No se aplica desde el agente.
+-- Aplicar MANUALMENTE por SQL Editor. NO usar `supabase db push` hasta alinear
+-- el historial remoto con `supabase migration repair` (versiones 2026*).
 
 create table if not exists public.vendor_admins (
   user_id uuid primary key references auth.users (id) on delete cascade,
@@ -209,11 +210,13 @@ revoke all on function public.subscription_is_active() from public;
 revoke all on function public.subscription_is_active() from anon;
 grant execute on function public.subscription_is_active() to authenticated;
 
+drop function if exists public.register_payment(date, numeric, text, text);
+
 create or replace function public.register_payment(
-  period_end date,
-  amount numeric,
-  method text default null,
-  reference text default null
+  p_period_end date,
+  p_amount numeric,
+  p_method text default null,
+  p_reference text default null
 )
 returns public.subscription_payments
 language plpgsql
@@ -231,8 +234,8 @@ begin
       using errcode = '42501';
   end if;
 
-  if period_end is null then
-    raise exception 'period_end es obligatorio' using errcode = '22023';
+  if p_period_end is null then
+    raise exception 'p_period_end es obligatorio' using errcode = '22023';
   end if;
 
   today_bogota := (timezone('America/Bogota', now()))::date;
@@ -246,8 +249,8 @@ begin
     raise exception 'No existe fila de suscripción' using errcode = 'P0002';
   end if;
 
-  if period_end < rec.current_period_end then
-    raise exception 'period_end debe ser >= current_period_end actual'
+  if p_period_end < rec.current_period_end then
+    raise exception 'p_period_end debe ser >= current_period_end actual'
       using errcode = '22023';
   end if;
 
@@ -267,18 +270,18 @@ begin
   )
   values (
     today_bogota,
-    amount,
-    nullif(trim(coalesce(method, '')), ''),
-    nullif(trim(coalesce(reference, '')), ''),
+    p_amount,
+    nullif(trim(coalesce(p_method, '')), ''),
+    nullif(trim(coalesce(p_reference, '')), ''),
     period_start,
-    period_end,
+    p_period_end,
     (select auth.uid())
   )
   returning * into payment;
 
   update public.subscription
   set
-    current_period_end = period_end,
+    current_period_end = p_period_end,
     status = 'active',
     updated_at = now(),
     updated_by = (select auth.uid())

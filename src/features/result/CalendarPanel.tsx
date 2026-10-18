@@ -1,6 +1,7 @@
 import { Trash2 } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { Field, PrimaryButton, SelectInput, TextInput } from '../../components/ui/FormField'
+import { useSubscriptionReadOnly } from '../../hooks/useSubscription'
 import { useAddWorkshopDay, useDeleteWorkshopDay, useWorkshopCalendar } from '../../hooks/useWorkshopCalendar'
 import { endOfMonthISO, formatMonthLong, startOfMonthISO, todayISO } from '../../lib/efficiency'
 import { workingDaysInMonth } from '../../lib/result'
@@ -13,6 +14,7 @@ const KIND_LABEL: Record<WorkshopCalendarKind, string> = {
 }
 
 export function CalendarPanel() {
+  const readOnly = useSubscriptionReadOnly()
   const [month, setMonth] = useState(todayISO().slice(0, 7))
   const from = startOfMonthISO(`${month}-01`)
   const to = endOfMonthISO(`${month}-01`)
@@ -57,6 +59,7 @@ export function CalendarPanel() {
         className="mb-5 grid gap-3 rounded-2xl border border-zinc-200 bg-white p-4 sm:grid-cols-4 sm:items-end"
         onSubmit={(event) => {
           event.preventDefault()
+          if (readOnly) return
           addDay.mutate(
             { occurred_on: occurredOn, kind, name },
             {
@@ -90,7 +93,7 @@ export function CalendarPanel() {
             onChange={(event) => setName(event.target.value)}
           />
         </Field>
-        <PrimaryButton type="submit" disabled={addDay.isPending}>
+        <PrimaryButton type="submit" disabled={readOnly || addDay.isPending}>
           {addDay.isPending ? 'Guardando…' : 'Agregar día'}
         </PrimaryButton>
         {addDay.error ? (
@@ -118,8 +121,9 @@ export function CalendarPanel() {
               {item.source === 'manual' ? (
                 <button
                   type="button"
-                  className="shrink-0 text-rose-500 hover:text-rose-700"
+                  className="shrink-0 text-rose-500 hover:text-rose-700 disabled:cursor-not-allowed disabled:opacity-40"
                   title="Quitar"
+                  disabled={readOnly}
                   onClick={() => deleteDay.mutate(item.id)}
                 >
                   <Trash2 className="h-4 w-4" />

@@ -21,7 +21,7 @@ import { SubscriptionBanner } from '../../features/subscription/SubscriptionBann
 import { SubscriptionExpiredGate } from '../../features/subscription/SubscriptionExpired'
 import { useInstallPrompt } from '../../hooks/useInstallPrompt'
 import { useAuth } from '../../hooks/useAuth'
-import { useIsVendorAdmin, useSubscription } from '../../hooks/useSubscription'
+import { useIsVendorAdmin } from '../../hooks/useSubscription'
 import { useRealtimeInvalidation } from '../../hooks/useRealtimeInvalidation'
 import { navModulesForRole } from '../../lib/access'
 import { supabase } from '../../lib/supabase'
@@ -45,7 +45,6 @@ export function AppShell() {
   const [open, setOpen] = useState(false)
   const install = useInstallPrompt()
   const vendorQuery = useIsVendorAdmin()
-  const subscriptionQuery = useSubscription()
   const modules = navModulesForRole(profile?.role, { isVendorAdmin: vendorQuery.data === true })
   useRealtimeInvalidation()
 
@@ -147,7 +146,7 @@ export function AppShell() {
         <main className={`min-w-0 p-4 sm:p-6 ${install.visible ? 'pb-36' : ''}`}>
           <SubscriptionBanner />
           <RequireRole>
-            <SubscriptionExpiredGate state={subscriptionQuery.data ?? undefined}>
+            <SubscriptionExpiredGate>
               <Outlet />
             </SubscriptionExpiredGate>
           </RequireRole>
