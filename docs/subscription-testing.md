@@ -10,6 +10,10 @@ Las migraciones se aplican **por SQL Editor** (copiar/pegar el archivo completo)
 **No uses `supabase db push`** hasta alinear el historial remoto con
 `supabase migration repair` (las versiones locales son `20261018*`).
 
+**NO re-ejecutar** `20261018010000` ni `20261018020000` **después de** `20261018040000`:
+revierten `subscription_state` y los controles a versiones anteriores.
+Si hace falta, volver a correr `040000` al final.
+
 ## Archivos
 
 | Fase | Archivo | Efecto en producción |

@@ -1,6 +1,8 @@
 -- Controles de proveedor (aditiva). Requiere fase 1 (tablas + is_vendor_admin).
 -- Aplicar MANUALMENTE por SQL Editor después de 20261018010000_subscription_schema.sql.
 -- NO usar `supabase db push` hasta alinear el historial con migration repair.
+-- NO re-ejecutar después de 20261018040000: revierte subscription_state y los
+-- controles a versiones anteriores. Si hace falta, volver a correr 040000 al final.
 
 create or replace function public.set_enforcement(p_enabled boolean)
 returns public.subscription

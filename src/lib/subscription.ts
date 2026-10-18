@@ -18,7 +18,7 @@ export type SubscriptionState = {
   grace_until?: string | null
   days_left_in_grace?: number
   message?: string | null
-  /** Si es false, grace/suspended/expired no bloquean UI; due_soon sí se muestra. */
+  /** Si es false, suspended/expired no bloquean UI; due_soon y grace sí muestran aviso. */
   enforcement_enabled?: boolean
   source?: 'local' | 'panel' | string | null
   last_synced_at?: string | null
@@ -86,8 +86,8 @@ export function resolveEffectiveStatus(
 
 /**
  * Avisos según effective_status.
- * due_soon: siempre (aunque enforcement esté apagado).
- * grace / suspended / expired: solo con enforcement_enabled === true.
+ * due_soon y grace: siempre (aunque enforcement esté apagado).
+ * suspended / expired: solo con enforcement_enabled === true.
  * state null (RPC fallido): sin aviso (fail-open).
  */
 export function getSubscriptionNotice(state: SubscriptionState | null | undefined): SubscriptionNotice | null {
@@ -119,15 +119,19 @@ export function getSubscriptionNotice(state: SubscriptionState | null | undefine
   }
 
   if (effective === 'grace') {
-    if (!enforcementOn) return null
     const until = state.grace_until ?? null
+    const message = enforcementOn
+      ? until
+        ? `Tu suscripción está vencida. Tienes hasta el ${formatSubscriptionDateLong(until)} para renovar antes de que el sistema quede en solo lectura.`
+        : 'Tu suscripción está vencida. Renueva antes de que el sistema quede en solo lectura.'
+      : until
+        ? `Tu suscripción está vencida. Tienes hasta el ${formatSubscriptionDateLong(until)} para renovar.`
+        : 'Tu suscripción está vencida. Renueva para continuar con normalidad.'
     return {
       kind: 'grace',
       tone: 'red',
       dismissible: false,
-      message: until
-        ? `Tu suscripción está vencida. Tienes hasta el ${formatSubscriptionDateLong(until)} para renovar antes de que el sistema quede en solo lectura.`
-        : 'Tu suscripción está vencida. Renueva antes de que el sistema quede en solo lectura.',
+      message,
       vendorMessage,
     }
   }

@@ -54,19 +54,23 @@ describe('getSubscriptionNotice', () => {
     expect(notice?.message).toBe('Tu suscripción vence hoy.')
   })
 
-  it('grace con enforcement false → sin aviso', () => {
-    expect(
-      getSubscriptionNotice(
-        state({
-          status: 'grace',
-          grace_until: '2026-11-09',
-          enforcement_enabled: false,
-        }),
-      ),
-    ).toBeNull()
+  it('grace con enforcement false → aviso sin mencionar solo lectura', () => {
+    const notice = getSubscriptionNotice(
+      state({
+        status: 'grace',
+        grace_until: '2026-11-09',
+        enforcement_enabled: false,
+      }),
+    )
+    expect(notice?.kind).toBe('grace')
+    expect(notice?.dismissible).toBe(false)
+    expect(notice?.message).toBe(
+      `Tu suscripción está vencida. Tienes hasta el ${formatSubscriptionDateLong('2026-11-09')} para renovar.`,
+    )
+    expect(notice?.message.toLowerCase()).not.toContain('solo lectura')
   })
 
-  it('grace con enforcement true → aviso con grace_until', () => {
+  it('grace con enforcement true → aviso con grace_until y solo lectura', () => {
     const notice = getSubscriptionNotice(
       state({
         status: 'grace',
@@ -79,6 +83,7 @@ describe('getSubscriptionNotice', () => {
     expect(notice?.dismissible).toBe(false)
     expect(notice?.message).toContain('Tienes hasta el')
     expect(notice?.message).toContain(formatSubscriptionDateLong('2026-11-09'))
+    expect(notice?.message).toContain('solo lectura')
   })
 
   it('grace con message del panel lo adjunta', () => {

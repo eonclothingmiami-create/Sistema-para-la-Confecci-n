@@ -1,30 +1,6 @@
-/** Firma HMAC y validación de requests del endpoint vendor-sync (testable en Node/Vitest). */
+/** Firma HMAC y validación vendor-sync (sin APIs de Deno; usable en Edge y Vitest). */
 
 const MAX_SKEW_MS = 5 * 60 * 1000
-
-export function timingSafeEqualHex(a: string, b: string): boolean {
-  const aa = a.toLowerCase()
-  const bb = b.toLowerCase()
-  if (aa.length !== bb.length) return false
-  let out = 0
-  for (let i = 0; i < aa.length; i += 1) {
-    out |= aa.charCodeAt(i) ^ bb.charCodeAt(i)
-  }
-  return out === 0
-}
-
-export async function hmacSha256Hex(secret: string, body: string): Promise<string> {
-  const enc = new TextEncoder()
-  const key = await crypto.subtle.importKey(
-    'raw',
-    enc.encode(secret),
-    { name: 'HMAC', hash: 'SHA-256' },
-    false,
-    ['sign'],
-  )
-  const sig = await crypto.subtle.sign('HMAC', key, enc.encode(body))
-  return [...new Uint8Array(sig)].map((byte) => byte.toString(16).padStart(2, '0')).join('')
-}
 
 export type VendorSyncPayload = {
   tenant_id: string
@@ -48,30 +24,83 @@ export type AuthResult =
   | { ok: true }
   | { ok: false; reason: AuthFailureReason; status: number }
 
+export function timingSafeEqualHex(a: string, b: string): boolean {
+  const aa = a.toLowerCase()
+  const bb = b.toLowerCase()
+  if (aa.length !== bb.length) return false
+  let out = 0
+  for (let i = 0; i < aa.length; i += 1) {
+    out |= aa.charCodeAt(i) ^ bb.charCodeAt(i)
+  }
+  return out === 0
+}
+
+export async function hmacSha256Hex(secret: string, message: string): Promise<string> {
+  const enc = new TextEncoder()
+  const key = await crypto.subtle.importKey(
+    'raw',
+    enc.encode(secret),
+    { name: 'HMAC', hash: 'SHA-256' },
+    false,
+    ['sign'],
+  )
+  const sig = await crypto.subtle.sign('HMAC', key, enc.encode(message))
+  return [...new Uint8Array(sig)].map((byte) => byte.toString(16).padStart(2, '0')).join('')
+}
+
+/** Canonical string: `${timestamp}.${method}.${rawBody}` */
+export function buildVendorSigningPayload(
+  timestamp: string,
+  method: string,
+  rawBody: string,
+): string {
+  return `${timestamp}.${method.toUpperCase()}.${rawBody}`
+}
+
+export async function signVendorRequest(opts: {
+  secret: string
+  timestamp: string
+  method: string
+  rawBody: string
+}): Promise<string> {
+  const payload = buildVendorSigningPayload(opts.timestamp, opts.method, opts.rawBody)
+  return hmacSha256Hex(opts.secret, payload)
+}
+
 export function parseVendorTimestamp(header: string | null | undefined): number | null {
   if (!header) return null
-  const asNum = Number(header)
+  const trimmed = header.trim()
+  const asNum = Number(trimmed)
   if (Number.isFinite(asNum) && asNum > 0) {
-    // segundos o ms
     return asNum < 1e12 ? asNum * 1000 : asNum
   }
-  const asDate = Date.parse(header)
+  const asDate = Date.parse(trimmed)
   return Number.isFinite(asDate) ? asDate : null
 }
 
 export async function verifyVendorSignature(opts: {
   secret: string
-  body: string
+  method: string
+  rawBody: string
   signatureHeader: string | null | undefined
   timestampHeader: string | null | undefined
   nowMs?: number
 }): Promise<AuthResult> {
-  const { secret, body, signatureHeader, timestampHeader, nowMs = Date.now() } = opts
+  const {
+    secret,
+    method,
+    rawBody,
+    signatureHeader,
+    timestampHeader,
+    nowMs = Date.now(),
+  } = opts
+
   if (!signatureHeader || !timestampHeader) {
     return { ok: false, reason: 'missing_headers', status: 401 }
   }
 
-  const ts = parseVendorTimestamp(timestampHeader)
+  const timestamp = timestampHeader.trim()
+  const ts = parseVendorTimestamp(timestamp)
   if (ts == null) {
     return { ok: false, reason: 'bad_timestamp', status: 401 }
   }
@@ -80,7 +109,12 @@ export async function verifyVendorSignature(opts: {
     return { ok: false, reason: 'timestamp_skew', status: 401 }
   }
 
-  const expected = await hmacSha256Hex(secret, body)
+  const expected = await signVendorRequest({
+    secret,
+    timestamp,
+    method,
+    rawBody,
+  })
   const provided = signatureHeader.replace(/^sha256=/i, '').trim()
   if (!timingSafeEqualHex(expected, provided)) {
     return { ok: false, reason: 'bad_signature', status: 401 }
@@ -89,7 +123,6 @@ export async function verifyVendorSignature(opts: {
   return { ok: true }
 }
 
-/** Validaciones de negocio antes de llamar a apply_vendor_state. */
 export function validateVendorPayloadAgainstRow(
   payload: VendorSyncPayload,
   row: { tenant_id: string | null; panel_version: number },

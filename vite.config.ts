@@ -8,7 +8,7 @@ const repoName = process.env.GITHUB_REPOSITORY?.split('/')[1] ?? 'Sistema-para-l
 export default defineConfig({
   test: {
     environment: 'node',
-    include: ['src/**/*.test.ts'],
+    include: ['src/**/*.test.ts', 'supabase/functions/_shared/**/*.test.ts'],
   },
   plugins: [
     react(),

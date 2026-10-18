@@ -3,6 +3,8 @@
 -- enforcement_enabled = false → fail-open: la app sigue escribiendo con normalidad.
 -- Aplicar MANUALMENTE por SQL Editor. NO usar `supabase db push` hasta alinear
 -- el historial remoto con `supabase migration repair` (versiones 2026*).
+-- NO re-ejecutar después de 20261018040000: revierte subscription_state y los
+-- controles a versiones anteriores. Si hace falta, volver a correr 040000 al final.
 
 create table if not exists public.vendor_admins (
   user_id uuid primary key references auth.users (id) on delete cascade,

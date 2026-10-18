@@ -89,6 +89,10 @@ as $$
   );
 $$;
 
+revoke all on function public.subscription_snapshot(public.subscription) from public;
+revoke all on function public.subscription_snapshot(public.subscription) from anon;
+revoke all on function public.subscription_snapshot(public.subscription) from authenticated;
+
 create or replace function public.log_subscription_event(
   p_source text,
   p_actor text,
